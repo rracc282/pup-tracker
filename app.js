@@ -1,6 +1,6 @@
 // Churro tracker app. Uses logic.js (pure) and Supabase (sync + push queue).
 'use strict';
-const APP_VERSION = '19';
+const APP_VERSION = '20';
 const CFG = window.PT_CONFIG || {};
 const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -299,10 +299,12 @@ async function copyEod(){
   try{ await navigator.clipboard.writeText(t.value); ok = true; }catch(e){ try{ ok = document.execCommand('copy'); }catch(_){} }
   $('eodStatus').textContent = ok ? 'Copied. Paste it into a chat with Claude.' : 'Select the text and copy it by hand.';
 }
+function openMore(){ const m = $('moreCard'); if(m){ m.open = true; m.scrollIntoView({ behavior:'smooth', block:'start' }); } }
 function maybeDeepLink(){
   const q = new URLSearchParams(location.search).get('open');
   if(q === 'day') openDaySheet();
   else if(q === 'eod') openEod();
+  else if(q === 'more') openMore();
   if(q){ history.replaceState(null, '', location.pathname); }
 }
 
@@ -978,6 +980,7 @@ if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('message', ev => {
     if(ev.data && ev.data.open === 'day') openDaySheet();
     if(ev.data && ev.data.open === 'eod') openEod();
+    if(ev.data && ev.data.open === 'more') openMore();
   });
 }
 

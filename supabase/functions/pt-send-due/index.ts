@@ -33,6 +33,21 @@ const MORNING: Msg[] = [
   ["Churro is up (probably 😴)", "Tell me what today looks like and I'll tune the training."],
   ["Hello, sunshine ☀️", "Before the day gets busy: day type and place?"],
 ];
+const MORNING_AFTER_UPSET: Msg[] = [
+  ["Fresh start today 🌅", "Yesterday was tough. Start easy, and tell me the day type and place."],
+  ["New day 🧡", "Take it gently today. What kind of day is it, and where will you be?"],
+  ["Easy does it ☀️", "A calmer day today. Pick day type and place."],
+];
+const RESTART: Msg[] = [
+  ["Ready when you are 🐾", "No reps for a couple of days. One easy rep is a fine restart."],
+  ["Back to it, gently 🌱", "A short, easy rep is all it takes."],
+  ["Small restart? 🐶", "She won't lose ground from a short break, so start easy."],
+];
+const WEEKLY: Msg[] = [
+  ["Week done 📈", "See how this week compares with last in More."],
+  ["Weekly check-in 🗓️", "Your progress comparison is ready."],
+  ["Sunday summary ✨", "This week vs last week is waiting in More."],
+];
 const REMIND: Record<string, Msg[]> = {
   home: [
     ["Ready to train? 🐾", "No reps yet today. Even one quick one counts."],
@@ -66,17 +81,28 @@ function pick<T>(a: T[]): T { return a[Math.floor(Math.random() * a.length)]; }
 // Which recurring pings are due for one user right now?
 function recurringDue(o: {
   minutes: number; date: string; dayType: string | null; medicated: boolean; liveReps: number;
+  yesterdayUpset?: boolean; daysSinceRep?: number | null; repsThisWeek?: number; weekday?: number;
 }): { key: string; title: string; body: string; open: string; tag: string }[] {
   const out: { key: string; title: string; body: string; open: string; tag: string }[] = [];
   const m = o.minutes;
   if (!o.dayType && m >= 7 * 60 && m < 7 * 60 + 30) {
-    const mm = pick(MORNING);
+    const mm = pick(o.yesterdayUpset ? MORNING_AFTER_UPSET : MORNING);
     out.push({ key: `morning:${o.date}`, title: mm[0], body: mm[1], open: "day", tag: "morning" });
   }
   const at = o.dayType ? REMINDER_AT[o.dayType] : undefined;
   if (at !== undefined && o.liveReps === 0 && m >= at && m < at + 30) {
-    const rm = pick(REMIND[o.dayType as string] || REMIND.home);
+    const restart = o.daysSinceRep === 2 || o.daysSinceRep === 4;
+    const rm = pick(restart ? RESTART : (REMIND[o.dayType as string] || REMIND.home));
     out.push({ key: `remind:${o.date}`, title: rm[0], body: rm[1], open: "", tag: "remind" });
+  }
+  // no day type chosen and she has had a quiet spell: still send the restart nudge once, at 10:00
+  if (!o.dayType && o.liveReps === 0 && (o.daysSinceRep === 2 || o.daysSinceRep === 4) && m >= 10 * 60 && m < 10 * 60 + 30) {
+    const rs = pick(RESTART);
+    out.push({ key: `remind:${o.date}`, title: rs[0], body: rs[1], open: "", tag: "remind" });
+  }
+  if (o.weekday === 0 && (o.repsThisWeek || 0) >= 1 && m >= 19 * 60 && m < 19 * 60 + 30) {
+    const wk = pick(WEEKLY);
+    out.push({ key: `weekly:${o.date}`, title: wk[0], body: wk[1], open: "more", tag: "weekly" });
   }
   if (o.liveReps >= 1 && m >= 22 * 60 && m < 22 * 60 + 30) {
     const em = pick(EOD);
@@ -149,7 +175,21 @@ if (typeof Deno !== "undefined" && Deno.serve) {
       const { data: ds } = await sb.from("pt_daystate").select("day_type,medicated").eq("user_id", u).eq("date", lp.date).maybeSingle();
       const { data: reps } = await sb.from("pt_reps").select("id,data").eq("user_id", u).eq("date", lp.date).eq("kind", "dep");
       const live = (reps || []).filter((r) => !r.data?.voided).length;
-      const items = recurringDue({ minutes: lp.minutes, date: lp.date, dayType: ds?.day_type || null, medicated: !!ds?.medicated, liveReps: live });
+      // recent history: last 14 days of ladder reps (not voided)
+      const since = new Date(now.getTime() - 14 * 86400000).toISOString().slice(0, 10);
+      const { data: recent } = await sb.from("pt_reps").select("date,data").eq("user_id", u).eq("kind", "dep").gte("date", since);
+      const liveRecent = (recent || []).filter((r) => !r.data?.voided);
+      const dates = liveRecent.map((r) => r.date as string).sort();
+      const lastDate = dates.length ? dates[dates.length - 1] : null;
+      const dayDiff = (a: string, b: string) => Math.round((Date.parse(a + "T12:00:00Z") - Date.parse(b + "T12:00:00Z")) / 86400000);
+      const yday = new Date(Date.parse(lp.date + "T12:00:00Z") - 86400000).toISOString().slice(0, 10);
+      const items = recurringDue({
+        minutes: lp.minutes, date: lp.date, dayType: ds?.day_type || null, medicated: !!ds?.medicated, liveReps: live,
+        yesterdayUpset: liveRecent.some((r) => r.date === yday && r.data?.outcome === "escalated" && !r.data?.medicated),
+        daysSinceRep: lastDate ? dayDiff(lp.date, lastDate) : null,
+        repsThisWeek: liveRecent.filter((r) => dayDiff(lp.date, r.date as string) <= 6).length,
+        weekday: new Date(lp.date + "T12:00:00Z").getUTCDay(),
+      });
       for (const it of items) {
         const { error } = await sb.from("pt_sent").insert({ user_id: u, key: it.key });
         if (error) continue; // already sent (primary key conflict)

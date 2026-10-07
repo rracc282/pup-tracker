@@ -24,4 +24,14 @@ assert.strictEqual(q({}),'send');
 assert.strictEqual(q({fireAt:1e12-16*60000}),'skip');
 assert.strictEqual(q({minutes:23*60}),'skip');
 assert.strictEqual(q({minutes:23*60,urgent:true}),'send');
+// new recurring pings
+assert.strictEqual(r({minutes:420,yesterdayUpset:true})[0].open,'day');
+assert(r({minutes:420,yesterdayUpset:true}).length===1);
+const rs=r({minutes:9*60+30,dayType:'home',daysSinceRep:2}); assert.strictEqual(rs.length,1); assert.strictEqual(rs[0].key,'remind:d');
+assert.strictEqual(r({minutes:10*60,daysSinceRep:4}).length,1);               // no day type, restart at 10:00
+assert.strictEqual(r({minutes:10*60,daysSinceRep:3}).length,0);
+assert.strictEqual(r({minutes:10*60,daysSinceRep:2,liveReps:1}).length,0);
+const wk=r({minutes:19*60,weekday:0,repsThisWeek:3,dayType:'home',liveReps:1}); assert(wk.some(x=>x.key==='weekly:d'&&x.open==='more'));
+assert(!r({minutes:19*60,weekday:1,repsThisWeek:3,dayType:'home'}).some(x=>x.key==='weekly:d'));
+assert(!r({minutes:19*60,weekday:0,repsThisWeek:0,dayType:'home'}).some(x=>x.key==='weekly:d'));
 console.log('fn tests ok');
