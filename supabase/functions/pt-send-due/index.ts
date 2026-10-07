@@ -22,6 +22,47 @@ function inQuiet(minutes: number) { return minutes >= QUIET_START || minutes < Q
 
 const REMINDER_AT: Record<string, number> = { home: 9 * 60 + 30, weekend: 10 * 60 + 30, sitter: 17 * 60 + 30 };
 
+type Msg = [string, string];
+const MORNING: Msg[] = [
+  ["Good morning! ☀️", "What kind of day is it for Churro, and where will you be? Tap to pick."],
+  ["Rise and shine, team Churro 🐶", "Tell me about today: day type and where you'll be."],
+  ["New day, fresh ladder 🪜", "Quick tap to set today's type and place."],
+  ["Morning, coach! ☕", "Home, weekend or sitter day? And where? Two taps."],
+  ["Sausage report, please 🌭", "What's today's plan for Churro?"],
+  ["Day starts here 🌅", "Pick today's day type and location so I can set the right pace."],
+  ["Churro is up (probably 😴)", "Tell me what today looks like and I'll tune the training."],
+  ["Hello, sunshine ☀️", "Before the day gets busy: day type and place?"],
+];
+const REMIND: Record<string, Msg[]> = {
+  home: [
+    ["Ready to train? 🐾", "No reps yet today. Even one quick one counts."],
+    ["Tiny step, big win 🏆", "Home day, so a good moment for a short rep."],
+    ["Churro's waiting 🐶", "No reps yet. One calm departure is all it takes."],
+    ["Quiet moment? 🚪", "Perfect time for a quick rep at home."],
+  ],
+  weekend: [
+    ["Weekend rep? 🌤️", "Slow day, so one or two short reps fit nicely."],
+    ["Easy does it 🛋️", "No reps yet. A quick one between coffee and cuddles?"],
+    ["Little and light 🐾", "Weekend pace: one gentle rep keeps the streak going."],
+  ],
+  sitter: [
+    ["Sitter day, one rep please 🧡", "Even on a sitter day, try to fit in at least one short, easy rep."],
+    ["Just one today 🌿", "Keep it tiny, but let's get at least one rep in with the sitter around."],
+    ["Gentle nudge 🐾", "At least one short rep today keeps the ladder moving. You've got this!"],
+    ["One small rep, big payoff 🏅", "Sitter days still count. Aim for one easy rep."],
+  ],
+};
+const EOD: Msg[] = [
+  ["Day done! 🌙", "Tap for today's summary to share with Claude."],
+  ["Great work today 🐾", "Your summary is ready to share with Claude."],
+  ["Lights out soon 💤", "Tap to grab today's summary."],
+  ["Churro is snoozing 😴", "Time to wrap up. Tap for the summary."],
+  ["That's a wrap! 🎬", "Today's reps are ready to share with Claude."],
+  ["Proud of you both 🧡", "Tap for today's summary before bed."],
+  ["End of day check-in 🌙", "Summary's ready whenever you are."],
+];
+function pick<T>(a: T[]): T { return a[Math.floor(Math.random() * a.length)]; }
+
 // Which recurring pings are due for one user right now?
 function recurringDue(o: {
   minutes: number; date: string; dayType: string | null; medicated: boolean; liveReps: number;
@@ -29,14 +70,17 @@ function recurringDue(o: {
   const out: { key: string; title: string; body: string; open: string; tag: string }[] = [];
   const m = o.minutes;
   if (!o.dayType && m >= 7 * 60 && m < 7 * 60 + 30) {
-    out.push({ key: `morning:${o.date}`, title: "Good morning! ☀️", body: "What kind of day is it for Churro, and where will you be? Tap to pick.", open: "day", tag: "morning" });
+    const mm = pick(MORNING);
+    out.push({ key: `morning:${o.date}`, title: mm[0], body: mm[1], open: "day", tag: "morning" });
   }
   const at = o.dayType ? REMINDER_AT[o.dayType] : undefined;
   if (at !== undefined && o.liveReps === 0 && m >= at && m < at + 30) {
-    out.push({ key: `remind:${o.date}`, title: "Ready to train? 🐾", body: "No reps yet today. Even one quick one counts.", open: "", tag: "remind" });
+    const rm = pick(REMIND[o.dayType as string] || REMIND.home);
+    out.push({ key: `remind:${o.date}`, title: rm[0], body: rm[1], open: "", tag: "remind" });
   }
   if (o.liveReps >= 1 && m >= 22 * 60 && m < 22 * 60 + 30) {
-    out.push({ key: `eod:${o.date}`, title: "Day done! 🌙", body: "Tap for today's summary to share with Claude.", open: "eod", tag: "eod" });
+    const em = pick(EOD);
+    out.push({ key: `eod:${o.date}`, title: em[0], body: em[1], open: "eod", tag: "eod" });
   }
   return out;
 }

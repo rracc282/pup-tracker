@@ -1,6 +1,6 @@
 // Churro tracker app. Uses logic.js (pure) and Supabase (sync + push queue).
 'use strict';
-const APP_VERSION = '11';
+const APP_VERSION = '12';
 const CFG = window.PT_CONFIG || {};
 const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -166,10 +166,42 @@ async function qCancelId(id){
 const READY_MSGS = [
   ['Ready for the next rep! 🐾', 'Churro has had her rest. Come back, let us go!'],
   ['Rest time is over 🎉', 'Ready when you are. Next rep is waiting.'],
-  ['Back to it, team Churro!', 'She is rested and the next rep is ready.'],
+  ['Back to it, team Churro! 💪', 'She is rested and the next rep is ready.'],
   ['Let us go! 🐶', 'Next rep is unlocked. Come on back.'],
-  ['Ding ding! Round two', 'The break is done. Ready for another one?']
+  ['Ding ding! 🔔', 'The break is done. Ready for round two?'],
+  ['Sausage is rested 🌭', 'Come back and let us do this.'],
+  ['Your turn, coach 🏅', 'The next rep is waiting for you.'],
+  ['Break over ✨', 'Fresh step, calm energy. Let us go!'],
+  ['Snooze button off 😴', 'Churro is recharged. Time for the next rep.'],
+  ['Plot twist: more training 🎬', 'The rest is done and the door is calling.'],
+  ['Tick tock, rep o\'clock ⏰', 'Rest time is up. Come on back!'],
+  ['She is ready, are you? 🐕', 'Next rep unlocked. Deep breath, calm energy.'],
+  ['Round two, fight! 🥊', 'Gently, of course. The next rep is ready.'],
+  ['Ears up, rest over 🐾', 'Next rep is waiting. You two are doing great.'],
+  ['Treat o\'clock? 🦴', 'Break finished. Come back for the next rep.'],
+  ['Back to the ladder 🪜', 'One more step up. Ready when you are.']
 ];
+const TIMEUP_MSGS = [
+  ['Time is up! ⏰', 'Come back in calmly, no big hello.'],
+  ['That is the timer ⏱️', 'Walk in quietly, no fuss.'],
+  ['Back in, low key 🚪', 'No big greeting, just calm.'],
+  ['Time! ✅', 'Stay calm, ignore the party.'],
+  ['Rep complete 🎉', 'Slip back in calmly.'],
+  ['Door time 🐾', 'Go in quietly, praise comes later.'],
+  ['Ding! Mission done 🔔', 'Stroll in like nothing happened.'],
+  ['Tail-wag timer 🐕', 'Walk back in cool and calm.'],
+  ['You did it! 🙌', 'Now the hard part: a very boring entrance.'],
+  ['Time to return 🚪', 'Quiet entrance, zero fanfare.'],
+  ['Stopwatch says yes ✨', 'Come in softly and keep it dull.'],
+  ['Nailed it 💪', 'Ninja entrance, please. No big hello.']
+];
+const TEST_MSGS = [
+  ['Woof! 🐕 It works', 'Notifications are on. Churro approves.'],
+  ['Test passed ✅', 'Sausage-approved and ready to go.'],
+  ['Ta-da! 🎉', 'Notifications are working. Treats all round!'],
+  ['Squeaky toy squeak! 🧸', 'That was your test. All good.']
+];
+function rnd(a){ return a[Math.floor(Math.random() * a.length)]; }
 function scheduleReady(){
   qCancelKind('ready').then(() => {
     const live = liveEntries().filter(e => e.kind === 'dep');
@@ -698,7 +730,8 @@ async function goOut(){
   saveActive(); startTicking(); render({ rep:true });
   const target = DUR[r.step];
   if(target > 300){
-    const id = await qInsert({ fire_at: new Date(r.startedAt + target * 1000).toISOString(), kind:'timeup', tag:'timeup', urgent:true, title:'Time is up! ⏰', body:'Come back in calmly, no big hello. ' + stepLabel(r.step) + ' done.', open:'' });
+    const tm = rnd(TIMEUP_MSGS);
+    const id = await qInsert({ fire_at: new Date(r.startedAt + target * 1000).toISOString(), kind:'timeup', tag:'timeup', urgent:true, title:tm[0], body:tm[1] + ' ' + stepLabel(r.step) + ' done.', open:'' });
     if(id && ui.rep){ ui.rep.queueId = id; saveActive(); }
   }
 }
@@ -757,7 +790,8 @@ async function enablePush(){
   }catch(e){ setStatus('Could not turn on notifications: ' + (e && e.message || e)); }
 }
 async function testPush(){
-  const id = await qInsert({ fire_at: new Date().toISOString(), kind:'test', tag:'test', urgent:true, title:'Woof! 🐕 It works', body:'Notifications are on. Churro approves.', open:'' });
+  const tt = rnd(TEST_MSGS);
+  const id = await qInsert({ fire_at: new Date().toISOString(), kind:'test', tag:'test', urgent:true, title:tt[0], body:tt[1], open:'' });
   setStatus(id ? 'Test queued. It should arrive within a minute.' : 'Could not queue the test. Are you online?');
 }
 
