@@ -1,0 +1,325 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Churro</title>
+<meta name="theme-color" content="#1F6F5C">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Churro">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Public+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  /* Layout: one phone-width column. Ladder position on top, one rep card in the middle, small log tools below. */
+  :root{
+    --font-display:'Bricolage Grotesque','Public Sans',system-ui,sans-serif;
+    --font-body:'Public Sans',system-ui,sans-serif;
+    --font-mono:'IBM Plex Mono',ui-monospace,monospace;
+
+    --bg:#F1F5F3;
+    --surface:#FFFFFF;
+    --ink:#16302C;
+    --ink-2:#4A645E;
+    --line:#D6E0DB;
+    --accent:#1F6F5C;
+    --accent-ink:#FFFFFF;
+    --accent-soft:#DCEEE7;
+    --calm:#2E8B62;
+    --calm-bg:#E1F2E9;
+    --wobble:#B67A10;
+    --wobble-bg:#FAEFD3;
+    --upset:#B5473A;
+    --upset-bg:#F8E1DC;
+    --radius:16px;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#0F1A18;
+      --surface:#16251F;
+      --ink:#E6F0EC;
+      --ink-2:#9DB5AD;
+      --line:#28403A;
+      --accent:#4FB596;
+      --accent-ink:#06201A;
+      --accent-soft:#1B3A31;
+      --calm:#5CC08F;
+      --calm-bg:#183A2B;
+      --wobble:#E3B24A;
+      --wobble-bg:#3A2F12;
+      --upset:#E07A6B;
+      --upset-bg:#3E1E1A;
+      color-scheme:dark;
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#0F1A18;
+    --surface:#16251F;
+    --ink:#E6F0EC;
+    --ink-2:#9DB5AD;
+    --line:#28403A;
+    --accent:#4FB596;
+    --accent-ink:#06201A;
+    --accent-soft:#1B3A31;
+    --calm:#5CC08F;
+    --calm-bg:#183A2B;
+    --wobble:#E3B24A;
+    --wobble-bg:#3A2F12;
+    --upset:#E07A6B;
+    --upset-bg:#3E1E1A;
+    color-scheme:dark;
+  }
+
+  *{box-sizing:border-box;}
+  body{
+    background:var(--bg);
+    color:var(--ink);
+    font-family:var(--font-body);
+    font-size:15px;
+    line-height:1.45;
+    padding-inline:16px;
+    padding-block:20px 72px;
+  }
+  .wrap{max-width:560px;margin:0 auto;display:flex;flex-direction:column;gap:14px;}
+  button{font:inherit;color:inherit;cursor:pointer;}
+  button:focus-visible,input:focus-visible{outline:3px solid var(--accent);outline-offset:2px;}
+  .eyebrow{
+    font-family:var(--font-mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-2);
+  }
+  h1{font-family:var(--font-display);font-weight:700;font-size:28px;line-height:1.1;margin:2px 0 4px;letter-spacing:-.01em;text-wrap:balance;}
+  .sub{color:var(--ink-2);font-size:14px;max-width:46ch;}
+
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:16px;}
+  .card h2{font-family:var(--font-display);font-size:18px;margin:0 0 10px;font-weight:700;}
+  .label{font-size:12.5px;color:var(--ink-2);font-weight:600;margin-bottom:8px;display:block;}
+
+  /* chips */
+  .chips{display:flex;flex-wrap:wrap;gap:8px;}
+  .chip{
+    min-height:40px;padding:8px 14px;border-radius:999px;border:1px solid var(--line);
+    background:var(--bg);font-weight:600;font-size:14px;
+  }
+  .chip[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink);}
+  .chip:disabled{opacity:.45;cursor:not-allowed;}
+
+  /* ladder position */
+  .where{display:flex;flex-direction:column;gap:8px;}
+  .pos-row{display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap;}
+  .pos-now{font-family:var(--font-display);font-weight:700;font-size:20px;}
+  .pos-step{font-family:var(--font-mono);font-size:12px;color:var(--ink-2);}
+  .bar{height:10px;border-radius:999px;background:var(--line);overflow:hidden;}
+  .bar > div{height:100%;background:var(--accent);border-radius:999px;transition:width .4s ease;}
+  .pos-next{font-size:13px;color:var(--ink-2);}
+  .pos-note{font-size:13px;color:var(--ink);background:var(--accent-soft);padding:8px 10px;border-radius:10px;}
+
+  /* rep card */
+  .hero{padding:18px 16px 16px;}
+  .rep-label{font-family:var(--font-display);font-weight:700;font-size:32px;line-height:1.05;margin:2px 0 6px;text-wrap:balance;}
+  .rep-sub{color:var(--ink-2);font-size:14px;margin-bottom:12px;}
+  .steps{margin:0 0 14px;padding:0;list-style:none;display:flex;flex-direction:column;gap:6px;font-size:14.5px;}
+  .steps li{padding-left:18px;position:relative;}
+  .steps li::before{content:"";position:absolute;left:2px;top:.62em;width:7px;height:7px;border-radius:50%;background:var(--accent);}
+  .btn{
+    display:block;width:100%;min-height:54px;border-radius:14px;border:1px solid var(--line);
+    background:var(--bg);font-weight:700;font-size:16px;padding:12px 16px;
+  }
+  .btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);}
+  .btn.danger{background:var(--upset-bg);color:var(--upset);border-color:var(--upset);}
+  .btn + .btn{margin-top:10px;}
+  .btn:disabled{opacity:.5;cursor:not-allowed;}
+  details.help{margin:0 0 14px;font-size:13.5px;}
+  details.help summary{cursor:pointer;font-weight:600;color:var(--ink-2);min-height:32px;display:flex;align-items:center;}
+  .help-list{margin:6px 0 0;padding-left:18px;display:flex;flex-direction:column;gap:6px;}
+  .help-list b{font-weight:700;}
+  .wait{padding:10px 12px;border-radius:12px;background:var(--wobble-bg);margin-bottom:12px;border:1px solid var(--line);}
+  .wait-top{display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap;}
+  .wait b span{font-family:var(--font-mono);font-weight:500;font-variant-numeric:tabular-nums;}
+  .link{background:none;border:none;color:var(--ink-2);text-decoration:underline;padding:10px 4px;font-size:14px;}
+  .link-row{display:flex;justify-content:center;margin-top:4px;}
+
+  .banner{padding:10px 12px;border-radius:12px;font-size:13.5px;margin-bottom:12px;background:var(--wobble-bg);color:var(--ink);border:1px solid var(--line);}
+  .banner.info{background:var(--accent-soft);}
+  .banner.upset{background:var(--upset-bg);}
+
+  .feedback{border-radius:12px;padding:12px;margin-bottom:14px;font-size:14.5px;}
+  .feedback.calm{background:var(--calm-bg);}
+  .feedback.mild{background:var(--wobble-bg);}
+  .feedback.escalated{background:var(--upset-bg);}
+  .feedback b{font-family:var(--font-display);font-size:16px;display:block;margin-bottom:2px;}
+  .fb-form{margin-top:10px;display:flex;flex-direction:column;gap:10px;}
+  .fb-form input[type="text"]{
+    width:100%;min-height:44px;border-radius:10px;border:1px solid var(--line);background:var(--surface);color:var(--ink);padding:8px 12px;font:inherit;
+  }
+  .fb-form .btn{min-height:44px;font-size:15px;}
+
+  /* clock */
+  .clock{font-family:var(--font-mono);font-weight:500;font-size:64px;line-height:1;letter-spacing:-.02em;margin:6px 0 10px;font-variant-numeric:tabular-nums;}
+  .clock.over{color:var(--upset);}
+  .tbar{height:12px;border-radius:999px;background:var(--line);overflow:hidden;margin-bottom:10px;}
+  .tbar > div{height:100%;background:var(--accent);width:0;}
+  .tnote{font-size:14px;color:var(--ink-2);margin-bottom:14px;min-height:1.4em;}
+  .tnote.alert{color:var(--upset);font-weight:700;}
+
+  /* outcome buttons */
+  .outs{display:flex;flex-direction:column;gap:10px;margin:8px 0 6px;}
+  .out{
+    text-align:left;border-radius:14px;border:2px solid var(--line);background:var(--surface);padding:12px 14px;min-height:64px;
+    display:flex;flex-direction:column;gap:2px;
+  }
+  .out b{font-family:var(--font-display);font-size:18px;}
+  .out span{font-size:13px;color:var(--ink-2);}
+  .out.calm{border-color:var(--calm);background:var(--calm-bg);}
+  .out.mild{border-color:var(--wobble);background:var(--wobble-bg);}
+  .out.escalated{border-color:var(--upset);background:var(--upset-bg);}
+
+  /* today */
+  .stats{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:14px;margin-bottom:12px;}
+  .stats b{font-family:var(--font-mono);font-weight:500;}
+  .counter{display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap;}
+  .counter .n{font-family:var(--font-mono);font-size:26px;min-width:2ch;text-align:center;}
+  .counter button{width:48px;height:48px;border-radius:12px;border:1px solid var(--line);background:var(--bg);font-size:22px;font-weight:700;}
+  .counter button.plus{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);}
+  .hint{font-size:13px;color:var(--ink-2);}
+
+  details.card > summary{cursor:pointer;font-family:var(--font-display);font-weight:700;font-size:17px;list-style:none;display:flex;justify-content:space-between;align-items:center;}
+  details.card > summary::-webkit-details-marker{display:none;}
+  details.card > summary::after{content:"+";font-family:var(--font-mono);color:var(--ink-2);}
+  details.card[open] > summary::after{content:"–";}
+  details.card[open] > summary{margin-bottom:10px;}
+
+  .row{display:flex;gap:10px;padding:10px 0;border-top:1px solid var(--line);align-items:flex-start;}
+  .row:first-of-type{border-top:none;}
+  .dot{width:12px;height:12px;border-radius:50%;margin-top:5px;flex:none;background:var(--line);}
+  .dot.calm{background:var(--calm);}
+  .dot.mild{background:var(--wobble);}
+  .dot.escalated{background:var(--upset);}
+  .row-main{flex:1;min-width:0;}
+  .row-top{font-family:var(--font-mono);font-size:12px;color:var(--ink-2);}
+  .row-what{font-weight:600;font-size:14.5px;}
+  .row-note{font-size:13.5px;color:var(--ink-2);overflow-wrap:anywhere;}
+  .mini{border:1px solid var(--line);background:var(--bg);border-radius:10px;padding:6px 10px;font-size:12.5px;min-height:34px;}
+  .mini.sure{background:var(--upset-bg);color:var(--upset);border-color:var(--upset);}
+  .empty{color:var(--ink-2);font-size:14px;}
+
+  .how{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:8px;font-size:14px;}
+  .how li::marker{color:var(--accent);font-weight:700;}
+  .status{font-size:12.5px;color:var(--ink-2);margin-top:10px;}
+  @media (prefers-reduced-motion: reduce){ .bar > div{transition:none;} }
+
+  body{padding-block:calc(20px + env(safe-area-inset-top)) calc(72px + env(safe-area-inset-bottom));}
+  .topbar{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;}
+  .daychip{min-height:40px;padding:8px 14px;border-radius:999px;border:1px solid var(--line);background:var(--surface);font-weight:600;font-size:14px;white-space:nowrap;}
+  .daychip.med,.dayChip.med{border-color:var(--wobble);}
+  .banner.ask{background:var(--accent-soft);border-color:var(--accent);}
+  .banner button.inl{background:none;border:none;text-decoration:underline;font-weight:700;padding:0;color:inherit;}
+  .sync{font-size:12px;color:var(--ink-2);font-family:var(--font-mono);}
+  .sync.off{color:var(--wobble);}
+  textarea.note{width:100%;min-height:84px;border-radius:12px;border:1px solid var(--line);background:var(--surface);color:var(--ink);padding:10px 12px;font:inherit;font-size:16px;resize:vertical;}
+  input.txt,select.txt{width:100%;min-height:46px;border-radius:10px;border:1px solid var(--line);background:var(--surface);color:var(--ink);padding:8px 12px;font:inherit;font-size:16px;}
+  .undo{margin-top:6px;}
+  .row.voided .row-what,.row.voided .row-note{text-decoration:line-through;opacity:.55;}
+  .row.voided .dot{opacity:.35;}
+  .rowbtns{display:flex;flex-direction:column;gap:6px;}
+  .edit{margin-top:8px;padding:10px;border-radius:12px;background:var(--bg);display:flex;flex-direction:column;gap:10px;}
+  dialog{border:1px solid var(--line);border-radius:18px;background:var(--surface);color:var(--ink);padding:18px;width:min(520px,calc(100vw - 24px));max-height:88vh;overflow:auto;}
+  dialog::backdrop{background:rgba(0,0,0,.45);}
+  dialog h2{font-family:var(--font-display);margin:0 0 10px;font-size:20px;}
+  .stack{display:flex;flex-direction:column;gap:12px;}
+  .login{max-width:420px;margin:12vh auto 0;display:flex;flex-direction:column;gap:12px;}
+  .err{color:var(--upset);font-size:13.5px;min-height:1.3em;}
+  .toggle{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 12px;border:1px solid var(--line);border-radius:12px;}
+  .toggle b{display:block;}
+  .sumbox{width:100%;min-height:220px;font-family:var(--font-mono);font-size:12px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink);padding:10px;}
+  .more-list{display:flex;flex-direction:column;gap:10px;}
+  .btn.sm{min-height:44px;font-size:15px;}
+  a.btn{color:inherit;}
+  [hidden]{display:none !important;}
+
+</style>
+</head>
+<body>
+
+<section class="login" id="loginView" hidden>
+  <div><div class="eyebrow">Churro</div><h1>Alone-time ladder</h1><div class="sub">Sign in with the same email and password as Out &amp; About.</div></div>
+  <form class="stack" id="loginForm">
+    <input class="txt" id="email" type="email" autocomplete="username" placeholder="Email" required>
+    <input class="txt" id="password" type="password" autocomplete="current-password" placeholder="Password" required>
+    <button class="btn primary" type="submit">Sign in</button>
+    <div class="err" id="loginErr" role="alert"></div>
+  </form>
+</section>
+
+<main class="wrap" id="app" hidden>
+  <header class="topbar">
+    <div>
+      <div class="eyebrow">Churro <span class="sync" id="syncDot"></span></div>
+      <h1>Alone-time ladder</h1>
+    </div>
+    <button class="dayChip daychip" id="dayChip" aria-label="Day type"></button>
+  </header>
+
+  <div id="dayBanner"></div>
+
+  <section class="card where" id="posCard" aria-label="Where you are on the ladder">
+    <div class="chips" id="placeChips" role="group" aria-label="Where are you"></div>
+    <div class="pos-row"><span class="pos-now" id="posNow"></span><span class="pos-step" id="posStep"></span></div>
+    <div class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" id="posBar"><div id="posFill"></div></div>
+    <div class="pos-next" id="posNext"></div>
+    <div class="pos-note" id="posNote" hidden></div>
+  </section>
+
+  <section class="card" id="pocketCard">
+    <span class="label">How long do you have?</span>
+    <div class="chips" id="pocketChips" role="group" aria-label="Time available"></div>
+    <span class="label" style="margin-top:12px">Where is she?</span>
+    <div class="chips" id="spotChips" role="group" aria-label="Her spot"></div>
+  </section>
+
+  <section class="card hero" id="repCard" aria-live="polite"></section>
+
+  <section class="card" id="todayCard"></section>
+
+  <details class="card" id="logCard">
+    <summary>Log</summary>
+    <div id="logList"></div>
+  </details>
+
+  <details class="card" id="moreCard">
+    <summary>More</summary>
+    <div class="more-list" id="moreList"></div>
+  </details>
+
+  <details class="card">
+    <summary>How it works</summary>
+    <ol class="how">
+      <li>Pick the time you have. You get one rep. Do it, tap how she did. The next rep updates by itself.</li>
+      <li>The first rungs are cue practice in your real order: coat, shoes, bag, keys, bolt. One cue at a time, then all five together. First with her watching, then with her behind the closed door. Never stack cues before each one is boring.</li>
+      <li>You move on after 2 calm reps in a row for coat, shoes and bag, and 3 for keys, bolt, the stack and anything behind the door. At most 3 step-ups a day on the cue steps. That is also when you move from her watching to her only hearing it.</li>
+      <li>After the cues, the rungs are seconds spent outside, growing slowly toward 4 hours. Most reps are your working step. Some are shorter or easier on purpose, and some are no-leave decoys (open and close the door), so the cues do not always mean you are going. After a wobble the next rep is always easier. Only reps at your working step move you up, and none is ever harder than that.</li>
+      <li>Calm moves you up. A wobble repeats the step. Two wobbles drop one step. An upset drops two and pauses you for 3 hours.</li>
+      <li>The app spaces the reps: 2 minutes after a calm quick rep (double after a wobble), longer after longer steps. After 5 in a row it asks for an hour off. Daily limits: 15 quick reps (cues and steps up to 1 minute) and 5, 8 or 10 longer reps (10 on Wednesdays). "Skip the wait" lets you start early, but she then has less time to recover and wobbles become more likely.</li>
+      <li>Between training reps, do not leave her alone for longer than your current step. Until the ladder catches up, groceries, drinks and concerts mean taking her along or using a sitter. Real absences she cannot handle undo the training.</li>
+      <li>Best conditions: after a walk, relaxed, awake or just waking, you return calmly. Come back at the first sign it is building, before panic.</li>
+      <li>A rest block is separate: she is behind the closed door while you do something else at home. It never changes your step.</li>
+      <li>With your partner home, you both leave together. If one of you stays, she is not alone and it does not count. Tick "Both of us" when you add a note.</li>
+      <li>Zurich or anywhere new has its own ladder and starts three steps below your Home step. Run a rep on one device from start to finish. The timer lives on the device that started it, while reps and waits sync everywhere.</li>
+    </ol>
+      <li>Day type matters. Home days allow 10 longer reps, weekends 8, sitter days 5. The app asks every morning. On a medicated day, reps are logged but do not move your step.</li>
+      <li>Notifications: next rep ready, time is up on long steps, a morning day-type question, a training reminder, and a summary nudge at 22:00. Nothing between 22:30 and 07:00 except a time-up.</li>
+    </ol>
+  </details>
+</main>
+
+<dialog id="daySheet"><div class="stack" id="dayBody"></div></dialog>
+<dialog id="eodSheet"><div class="stack" id="eodBody"></div></dialog>
+
+<script src="config.js"></script>
+<script src="supabase.js"></script>
+<script src="logic.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

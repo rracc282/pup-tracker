@@ -83,16 +83,26 @@ function computeState(depList, startLevel){
   return { level, run, wob, nextEasy, lastEvent, need: need(level) };
 }
 
-// Reps that count toward the ladder: live, a ladder rep, this place, not done on a medicated day.
+// A "baseline" entry says: my step is N from here on (set by hand). Reps before it no longer count.
+function baselineFor(list, place){
+  const b = list.filter(e => e.kind === 'baseline' && isLive(e) && (e.place || 'home') === place);
+  return b.length ? sortedByDate(b).pop() : null;
+}
+// Reps that count toward the ladder: live, a ladder rep, this place, not medicated, after the last baseline.
 function depsFor(list, place){
-  return sortedByDate(list.filter(e => e.kind === 'dep' && isLive(e) && !e.medicated && (e.place || 'home') === place));
+  const b = baselineFor(list, place);
+  return sortedByDate(list.filter(e => e.kind === 'dep' && isLive(e) && !e.medicated && (e.place || 'home') === place && (!b || e.createdAt > b.createdAt)));
+}
+function startFor(list, place){
+  const b = baselineFor(list, place);
+  if(b) return b.level;
+  if(place === 'home') return 0;
+  return Math.max(0, stateFrom(list, 'home').level - 3);
 }
 function stateFrom(list, place){
-  if(place === 'home') return computeState(depsFor(list, 'home'), 0);
   const own = depsFor(list, place);
-  const homeLevel = computeState(depsFor(list, 'home'), 0).level;
-  const st = computeState(own, Math.max(0, homeLevel - 3));
-  st.newPlace = own.length === 0;
+  const st = computeState(own, startFor(list, place));
+  if(place !== 'home') st.newPlace = own.length === 0 && !baselineFor(list, place);
   return st;
 }
 // Level after each rep in a sorted list, for the end-of-day summary.
@@ -215,7 +225,7 @@ function buildSummary(entries, days, date, place){
   const ds = days[date] || {};
   const st = stateFrom(live, place);
   const all = depsFor(live, place);
-  const lv = levelsAfter(all, place === 'home' ? 0 : Math.max(0, computeState(depsFor(live, 'home'), 0).level - 3));
+  const lv = levelsAfter(all, startFor(live, place));
   const levelAfterId = {}; all.forEach((e, i) => { levelAfterId[e.id] = lv[i]; });
   const c = dayDeps.filter(e => e.outcome === 'calm').length, w = dayDeps.filter(e => e.outcome === 'mild').length, u = dayDeps.filter(e => e.outcome === 'escalated').length;
   const L = [];
@@ -255,4 +265,4 @@ function buildSummary(entries, days, date, place){
   return L.join('\n');
 }
 
-if(typeof module !== 'undefined') module.exports = { DUR, TOP, FIRST_OUT, LAST_CUE, QUICK_CEILING, isQuick, STEP_NAMES, CUE_IDS, idOf, indexOfId, stepLabel, stepTag, stepEst, gapSec, fits, need, capFor, sortedByDate, computeState, depsFor, stateFrom, levelsAfter, rand01, pickNext, ceilingFor, cooldownMs, waitUntil, coachMsg, normalizeEntry, buildSummary, fmtSec, SESSION_MAX };
+if(typeof module !== 'undefined') module.exports = { DUR, TOP, FIRST_OUT, LAST_CUE, QUICK_CEILING, isQuick, STEP_NAMES, CUE_IDS, idOf, indexOfId, stepLabel, stepTag, stepEst, gapSec, fits, need, capFor, sortedByDate, computeState, depsFor, stateFrom, baselineFor, startFor, levelsAfter, rand01, pickNext, ceilingFor, cooldownMs, waitUntil, coachMsg, normalizeEntry, buildSummary, fmtSec, SESSION_MAX };
