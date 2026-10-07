@@ -1,5 +1,6 @@
 // Churro tracker app. Uses logic.js (pure) and Supabase (sync + push queue).
 'use strict';
+const APP_VERSION = '5';
 const CFG = window.PT_CONFIG || {};
 const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -528,6 +529,7 @@ function renderMore(){
       <label class="btn sm" style="text-align:center">Import a backup file<input type="file" id="importFile" accept="application/json,.json" hidden></label>
     </div>
     <div class="status" id="dbStatus"></div>
+    <div class="status">App version ${APP_VERSION}</div>
     <button class="btn sm" data-action="signout">Sign out</button>`;
 }
 
@@ -808,7 +810,7 @@ document.addEventListener('click', ev => {
       putEntry({ v:3, id: uuid(), kind:'alone', date: todayStr(), createdAt: Date.now(), minutes: m, outcome: ui.alone.outcome, notes: $('aloneNote').value.trim() });
       ui.alone = null; render({ rep:true }); setStatus('Logged.'); break;
     }
-    case 'setbase': { const lv = parseInt($('baseSel').value, 10); putEntry({ v:3, id: uuid(), kind:'baseline', place, date: todayStr(), createdAt: Date.now(), level: lv, outcome:'baseline', notes:'' }); render({ rep:true }); setStatus('Step set.'); break; }
+    case 'setbase': { const lv = parseInt($('baseSel').value, 10); if(!confirm('Set your step for ' + PLACE_NAME[place] + ' to: ' + stepLabel(lv) + '? Reps before now stop counting toward the ladder.')) break; putEntry({ v:3, id: uuid(), kind:'baseline', place, date: todayStr(), createdAt: Date.now(), level: lv, outcome:'baseline', notes:'' }); render({ rep:true }); setStatus('Step set.'); break; }
     case 'pushon': enablePush(); break;
     case 'pushtest': testPush(); break;
     case 'export': exportBackup(); break;
