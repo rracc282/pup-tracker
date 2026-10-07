@@ -29,7 +29,7 @@ function recurringDue(o: {
   const out: { key: string; title: string; body: string; open: string; tag: string }[] = [];
   const m = o.minutes;
   if (!o.dayType && m >= 7 * 60 && m < 7 * 60 + 30) {
-    out.push({ key: `morning:${o.date}`, title: "Good morning! ☀️", body: "What kind of day is it for Churro? Tap to pick Home, Sitter or Weekend.", open: "day", tag: "morning" });
+    out.push({ key: `morning:${o.date}`, title: "Good morning! ☀️", body: "What kind of day is it for Churro, and where will you be? Tap to pick.", open: "day", tag: "morning" });
   }
   const at = o.dayType ? REMINDER_AT[o.dayType] : undefined;
   if (at !== undefined && o.liveReps === 0 && m >= at && m < at + 30) {

@@ -1,6 +1,6 @@
 // Churro tracker app. Uses logic.js (pure) and Supabase (sync + push queue).
 'use strict';
-const APP_VERSION = '10';
+const APP_VERSION = '11';
 const CFG = window.PT_CONFIG || {};
 const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -39,7 +39,7 @@ let entries = [];               // derived, sorted
 let days = {};                  // date -> {day_type, medicated}
 let outbox = [];                // [{t:'rep'|'day', row}]
 let online = navigator.onLine;
-let place = lsGet('pt-place') || 'home'; if(!PLACE_NAME[place]) place = 'home';
+let place = 'home';   // today's place, set from the day sheet
 let pocket = parseInt(lsGet('pt-pocket'), 10) || 15;
 let spot = lsGet('pt-spot') || '';
 let ui = { mode:'idle', rep:null, feedback:null, showAll:false, confirmDel:null, editId:null, override:false, alone:null };
@@ -91,7 +91,8 @@ async function flushOutbox(){
         ? sb.from('pt_reps').upsert(op.row, { onConflict:'id' })
         : op.t === 'daydel' ? sb.from('pt_reps').delete().eq('id', op.row.id)
         : sb.from('pt_daystate').upsert(op.row, { onConflict:'user_id,date' });
-      const { error } = await q;
+      let { error } = await q;
+      if(error && op.t === 'day' && /place/i.test(error.message || '')){ const r = Object.assign({}, op.row); delete r.place; ({ error } = await sb.from('pt_daystate').upsert(r, { onConflict:'user_id,date' })); }
       if(error) throw error;
       outbox = outbox.filter(o => o !== op);
     }catch(e){ setStatus('Waiting to sync: ' + (e && e.message || 'offline')); break; }
@@ -108,7 +109,7 @@ function removeEntry(id){ repMap.delete(id); rebuild(); queueOp({ t:'daydel', ro
 function putDay(date, patch){
   days[date] = Object.assign({}, days[date] || {}, patch);
   const d = days[date];
-  queueOp({ t:'day', row:{ user_id: session.user.id, date, day_type: d.day_type || null, medicated: !!d.medicated, updated_at: new Date().toISOString() } });
+  queueOp({ t:'day', row:{ user_id: session.user.id, date, day_type: d.day_type || null, medicated: !!d.medicated, place: d.place || null, updated_at: new Date().toISOString() } });
 }
 async function pullAll(){
   if(!sb || !session || !online) return;
@@ -123,8 +124,8 @@ async function pullAll(){
     // keep what is still waiting in the outbox
     outbox.forEach(o => { if(o.t === 'rep') m.set(o.row.id, entryOf(o.row)); if(o.t === 'daydel') m.delete(o.row.id); });
     repMap = m; rebuild();
-    const dd = {}; d.data.forEach(x => { dd[x.date] = { day_type:x.day_type, medicated:x.medicated }; });
-    outbox.forEach(o => { if(o.t === 'day') dd[o.row.date] = { day_type:o.row.day_type, medicated:o.row.medicated }; });
+    const dd = {}; d.data.forEach(x => { dd[x.date] = { day_type:x.day_type, medicated:x.medicated, place:x.place }; });
+    outbox.forEach(o => { if(o.t === 'day') dd[o.row.date] = { day_type:o.row.day_type, medicated:o.row.medicated, place:o.row.place }; });
     days = dd; cacheSave(); setStatus('Synced. ' + entries.length + ' entries.'); setSync(); render();
     maybeDeepLink();
   }catch(e){ setStatus('Could not read saved reps: ' + (e && e.message || 'unknown error')); }
@@ -138,7 +139,7 @@ function subscribeRealtime(){
     })
     .on('postgres_changes', { event:'*', schema:'public', table:'pt_daystate' }, p => {
       if(p.eventType === 'DELETE') delete days[p.old.date];
-      else if(!outbox.some(o => o.t === 'day' && o.row.date === p.new.date)) days[p.new.date] = { day_type:p.new.day_type, medicated:p.new.medicated };
+      else if(!outbox.some(o => o.t === 'day' && o.row.date === p.new.date)) days[p.new.date] = { day_type:p.new.day_type, medicated:p.new.medicated, place:p.new.place };
       cacheSave(); render();
     })
     .subscribe();
@@ -187,17 +188,19 @@ function scheduleReady(){
 // ---------- day type ----------
 function dayState(){ return days[todayStr()] || {}; }
 function dayType(){ return dayState().day_type || null; }
+function dayPlace(){ return dayState().place || 'home'; }
 function isMedicated(){ return !!dayState().medicated; }
 function dayChipHtml(){
   const t = dayType();
-  return (t ? DAY_NAME[t] : 'Set day') + (isMedicated() ? ' · medicated' : '');
+  const pl = dayPlace();
+  return (t ? DAY_NAME[t] : 'Set day') + (t && pl !== 'home' ? ' · ' + PLACE_NAME[pl] : '') + (isMedicated() ? ' · medicated' : '');
 }
 function renderDay(){
   const chip = $('dayChip');
   chip.textContent = dayChipHtml();
   chip.classList.toggle('med', isMedicated());
   const b = $('dayBanner');
-  if(!dayType()) b.innerHTML = `<div class="banner ask">What kind of day is it? <button class="inl" data-action="daysheet">Pick a day type</button> It sets today's limits.</div>`;
+  if(!dayType()) b.innerHTML = `<div class="banner ask">What kind of day is it, and where will you be? <button class="inl" data-action="daysheet">Pick today</button> It sets today's limits.</div>`;
   else if(isMedicated()) b.innerHTML = `<div class="banner">Medicated day. Reps are logged, but they do not move your step.</div>`;
   else b.innerHTML = '';
 }
@@ -205,6 +208,8 @@ function openDaySheet(){
   const cur = dayType();
   $('dayBody').innerHTML = `<h2>Today</h2>
     <div class="stack">${DAY_TYPES.map(([k,l,h]) => `<button class="out ${cur===k?'calm':''}" data-daytype="${k}"><b>${l}</b><span>${h}</span></button>`).join('')}</div>
+    <span class="label" style="margin:2px 0 -4px">Where will you be?</span>
+    <div class="chips">${PLACES.map(([k,l]) => `<button class="chip" data-place="${k}" aria-pressed="${dayPlace()===k}">${l}</button>`).join('')}</div>
     <div class="toggle"><div><b>Medicated today</b><span class="hint">Reps still get logged and counted for spacing, but they do not move the ladder.</span></div>
       <button class="chip" id="medToggle" data-action="medtoggle" aria-pressed="${isMedicated()}">${isMedicated() ? 'Yes' : 'No'}</button></div>
     <button class="btn" data-action="closesheet">Done</button>`;
@@ -253,9 +258,7 @@ function waitInfo(){
 function ladderEntries(){ return liveEntries(); }  // depsFor() further drops medicated reps
 
 // ---------- rendering ----------
-function renderPlace(){
-  $('placeChips').innerHTML = PLACES.map(([k,l]) => `<button class="chip" data-place="${k}" aria-pressed="${place===k}" ${ui.mode!=='idle'?'disabled':''}>${l}</button>`).join('');
-}
+function renderPlace(){ /* place is chosen in the day sheet now */ }
 function renderPocket(){
   $('pocketBlock').hidden = !pocketMatters(stateFrom(ladderEntries(), place));
   $('pocketChips').innerHTML = POCKETS.map(([m,l]) => `<button class="chip" data-pocket="${m}" aria-pressed="${pocket===m}" ${ui.mode!=='idle'?'disabled':''}>${l}</button>`).join('');
@@ -562,6 +565,7 @@ function renderMore(){
 
 function render(opts){
   if(!session) return;
+  if(ui.mode === 'idle') place = dayPlace();
   renderDay(); renderPlace(); renderPocket(); renderPos(); renderToday(); renderLog();
   if(!ui.alone || !document.activeElement || !$('moreList').contains(document.activeElement)) renderMore();
   if(ui.mode !== 'run' || (opts && opts.rep)){
@@ -795,8 +799,8 @@ document.addEventListener('click', ev => {
   const t = ev.target.closest('button');
   if(!t) return;
   if(t.id === 'dayChip'){ openDaySheet(); return; }
-  if(t.dataset.daytype){ putDay(todayStr(), { day_type: t.dataset.daytype }); openDaySheet(); render(); return; }
-  if(t.dataset.place){ if(ui.mode === 'idle'){ place = t.dataset.place; lsSet('pt-place', place); ui.feedback = null; render({ rep:true }); } return; }
+  if(t.dataset.daytype){ putDay(todayStr(), { day_type: t.dataset.daytype, place: dayState().place || 'home' }); openDaySheet(); render(); return; }
+  if(t.dataset.place){ putDay(todayStr(), { place: t.dataset.place }); if(ui.mode === 'idle') place = t.dataset.place; ui.feedback = null; openDaySheet(); render({ rep:true }); return; }
   if(t.dataset.pocket){ if(ui.mode === 'idle'){ pocket = parseInt(t.dataset.pocket, 10); lsSet('pt-pocket', String(pocket)); render({ rep:true }); } return; }
   if(t.dataset.spot){ spot = spot === t.dataset.spot ? '' : t.dataset.spot; lsSet('pt-spot', spot); renderPocket(); return; }
   if(t.dataset.out){ saveRep(t.dataset.out); return; }
