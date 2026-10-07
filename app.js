@@ -325,6 +325,8 @@ function instructionsFor(step){
     'Come back calmly with no greeting. End early at the first sign it is building.'];
 }
 
+const CUE_NAME = ['Coat','Shoes','Bag','Keys','Bolt','All five cues','Coat','Shoes','Bag','Keys','Bolt','All five cues','Front door'];
+function cueName(i){ return 'cue: ' + CUE_NAME[i]; }
 function feedbackHtml(){
   const f = ui.feedback;
   if(!f) return '';
@@ -389,7 +391,7 @@ function renderRep(){
     const blocked = (!!waitInfo() || capReached(nx.step)) && !ui.override;
     const keep = ui.feedback ? feedbackHtml() : '';
     el.innerHTML = keep + bannersHtml(nx.step) +
-      `<div class="eyebrow">Next rep · ${esc(stepTag(nx.step))}</div>
+      `<div class="eyebrow">Next rep · ${esc(stepTag(nx.step))}${nx.step < FIRST_OUT ? ' · ' + esc(cueName(nx.step)) : ''}</div>
        <div class="rep-label">${esc(stepLabel(nx.step))}</div>
        <div class="rep-sub">${esc(sub)}</div>
        <ul class="steps">${instructionsFor(nx.step).map(t => `<li>${esc(t)}</li>`).join('')}</ul>
@@ -736,20 +738,26 @@ function exportBackup(){
 async function importFile(file){
   try{
     const j = JSON.parse(await file.text());
-    const have = new Set(Array.from(repMap.values()).map(e => e.legacyId).filter(Boolean));
+    const byLegacy = new Map();
+    repMap.forEach(e => { if(e.legacyId) byLegacy.set(e.legacyId, e); });
     let n = 0;
     (j.reps || []).forEach(x => {
       const lid = x.legacyId || x.id;
-      if(lid && have.has(lid)) return;
       const e = normalizeEntry(Object.assign({}, x));
-      e.legacyId = lid; e.id = uuid();
+      e.legacyId = lid;
       if(!e.date || !e.kind) return;
       if(!e.createdAt) e.createdAt = Date.parse(e.date + 'T12:00:00');
+      const ex = lid && byLegacy.get(lid);
+      if(ex){
+        // same entry imported before: update it in place (so a corrected file never makes duplicates)
+        if(JSON.stringify(rowOf(Object.assign({}, e, { id: ex.id })).data) === JSON.stringify(rowOf(ex).data) && ex.kind === e.kind) return;
+        e.id = ex.id; if(ex.voided) e.voided = true;
+      } else e.id = uuid();
       repMap.set(e.id, e); outbox.push({ t:'rep', row: rowOf(e) }); n++;
     });
     if(j.days){ Object.keys(j.days).forEach(d => { if(!days[d]) putDay(d, j.days[d]); }); }
     rebuild(); cacheSave(); flushOutbox(); render();
-    setStatus('Imported ' + n + ' entries.');
+    setStatus(n ? 'Imported or updated ' + n + ' entries.' : 'Nothing new to import. Everything in the file is already here.');
   }catch(e){ setStatus('That file could not be read.'); }
 }
 
