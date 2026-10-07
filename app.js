@@ -1,6 +1,6 @@
 // Churro tracker app. Uses logic.js (pure) and Supabase (sync + push queue).
 'use strict';
-const APP_VERSION = '20';
+const APP_VERSION = '21';
 const CFG = window.PT_CONFIG || {};
 const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -612,8 +612,7 @@ function weekHtml(){
   const pct = s => s.reps ? Math.round(s.calm / s.reps * 100) + '%' : '-';
   const diff = s => (s.end - s.start === 0 ? 'no change' : (s.end > s.start ? '+' : '') + (s.end - s.start) + ' step' + (Math.abs(s.end - s.start) === 1 ? '' : 's'));
   const row = (l, c, p) => `<tr><td>${l}</td><td>${c}</td><td>${p}</td></tr>`;
-  return `<div class="stack"><b>This week vs last week</b>
-    <table class="wk"><tr><th></th><th>Last 7 days</th><th>Before that</th></tr>
+  return `<table class="wk"><tr><th></th><th>Last 7 days</th><th>Before that</th></tr>
       ${row('Training days', w.cur.days, w.prev.days)}
       ${row('Reps', w.cur.reps, w.prev.reps)}
       ${row('Calm', pct(w.cur), pct(w.prev))}
@@ -621,50 +620,53 @@ function weekHtml(){
       ${row('Upsets', w.cur.esc, w.prev.esc)}
       ${row('Step change', diff(w.cur), diff(w.prev))}
       ${row('Highest step', w.cur.trained ? w.cur.high + 1 : '-', w.prev.trained ? w.prev.high + 1 : '-')}
-    </table><div class="hint">Medicated and voided reps do not count toward the ladder, but are included in the rep counts.</div></div>`;
+    </table><div class="hint">Medicated and voided reps do not count toward the ladder, but are included in the rep counts.</div>`;
 }
 function progressHtml(){
   const s = progressSeries(liveEntries(), place);
-  if(!s || s.length < 2) return s ? '<div class="stack"><b>Progress</b><div class="hint">The line appears after a second day of training.</div></div>' : '';
+  if(!s || s.length < 2) return s ? '<div class="hint">The line appears after a second day of training.</div>' : '';
   const W = 300, H = 90, P = 6;
   const x = i => P + (W - 2 * P) * (s.length === 1 ? 0 : i / (s.length - 1));
   const y = v => H - P - (H - 2 * P) * (v / TOP);
   const pts = s.map((p, i) => x(i).toFixed(1) + ',' + y(p.level).toFixed(1)).join(' ');
   const last = s[s.length - 1];
-  return `<div class="stack"><b>Progress</b>
-    <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Working step over time" style="width:100%;height:auto"><polyline points="${pts}" fill="none" stroke="var(--calm)" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/><circle cx="${x(s.length - 1).toFixed(1)}" cy="${y(last.level).toFixed(1)}" r="4.5" fill="var(--calm)"/></svg>
-    <div class="hint">${esc(fmtDay(s[0].date))} to ${esc(fmtDay(last.date))}. Now: ${esc(stepLabel(last.level))}.</div></div>`;
+  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Working step over time" style="width:100%;height:auto"><polyline points="${pts}" fill="none" stroke="var(--calm)" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/><circle cx="${x(s.length - 1).toFixed(1)}" cy="${y(last.level).toFixed(1)}" r="4.5" fill="var(--calm)"/></svg>
+    <div class="hint">${esc(fmtDay(s[0].date))} to ${esc(fmtDay(last.date))}. Now: ${esc(stepLabel(last.level))}.</div>`;
+}
+function moreSec(id, title, body, forceOpen){
+  if(!body) return '';
+  const open = forceOpen || (ui.moreOpen && ui.moreOpen[id]);
+  return `<details class="msec" data-sec="${id}"${open ? ' open' : ''}><summary>${esc(title)}</summary><div class="stack">${body}</div></details>`;
 }
 function renderMore(){
   const a = ui.alone;
   const perm = ('Notification' in window) ? Notification.permission : 'unsupported';
   let alone;
-  if(!a) alone = `<button class="btn sm" data-action="aloneopen">Log time she was really alone</button>`;
-  else alone = `<div class="stack"><b>Real alone time</b><div class="hint">For absences outside training (a sitter cancelled, an errand). It never changes your step.</div>
+  if(!a) alone = `<div class="hint">For absences outside training (a sitter cancelled, an errand). It never changes your step.</div><button class="btn sm" data-action="aloneopen">Log time she was really alone</button>`;
+  else alone = `<div class="hint">For absences outside training (a sitter cancelled, an errand). It never changes your step.</div>
       <input class="txt" id="aloneMin" type="number" inputmode="numeric" min="1" placeholder="Minutes" value="${esc(a.minutes || '')}">
       <div class="chips">${['calm','mild','escalated'].map(o => `<button class="chip" data-aout="${o}" aria-pressed="${a.outcome===o}">${OUT_NAME[o]}</button>`).join('')}<button class="chip" data-action="alonetraz" aria-pressed="${!!a.trazodone}">Trazodone given</button></div>
       <textarea class="note" id="aloneNote" placeholder="What happened? Dictate if you like.">${esc(a.notes || '')}</textarea>
-      <button class="btn sm primary" data-action="alonesave">Save</button><button class="link" data-action="aloneclose">Cancel</button></div>`;
-  $('moreList').innerHTML = `
-    ${weekHtml()}
-    ${progressHtml()}
-    ${alone}
-    <div class="stack"><b>Set my step</b>
-      <div class="hint">Use this once to start where she really is, or to move by hand. Earlier reps stop counting toward the ladder.</div>
+      <button class="btn sm primary" data-action="alonesave">Save</button><button class="link" data-action="aloneclose">Cancel</button>`;
+  const step = `<div class="hint">Use this once to start where she really is, or to move by hand. Earlier reps stop counting toward the ladder.</div>
       <select class="txt" id="baseSel">${Array.from({length:TOP+1},(_,i) => `<option value="${i}" ${i===stateFrom(ladderEntries(), place).level?'selected':''}>${i+1}. ${esc(stepLabel(i))}</option>`).join('')}</select>
-      <button class="btn sm" data-action="setbase">Set step for ${esc(PLACE_NAME[place])}</button></div>
-    <div class="stack"><b>Notifications</b>
-      <div class="hint">${pushOn ? 'On for this device.' : perm === 'denied' ? 'Blocked in iOS settings for this app.' : perm === 'unsupported' ? 'Open this from the Home Screen icon to turn them on.' : 'Off on this device.'}</div>
-      ${pushOn ? '<button class="btn sm" data-action="pushtest">Send a test notification</button>' : (perm === 'denied' || perm === 'unsupported' ? '' : '<button class="btn sm primary" data-action="pushon">Turn on notifications</button>')}
-    </div>
-    <div class="stack"><b>Backup and import</b>
-      <button class="btn sm" data-action="export">Download backup</button>
-      <label class="btn sm" style="text-align:center">Import a backup file<input type="file" id="importFile" accept="application/json,.json" hidden></label>
-    </div>
-    <div class="status" id="dbStatus"></div>
+      <button class="btn sm" data-action="setbase">Set step for ${esc(PLACE_NAME[place])}</button>`;
+  const notif = `<div class="hint">${pushOn ? 'On for this device.' : perm === 'denied' ? 'Blocked in iOS settings for this app.' : perm === 'unsupported' ? 'Open this from the Home Screen icon to turn them on.' : 'Off on this device.'}</div>
+      ${pushOn ? '<button class="btn sm" data-action="pushtest">Send a test notification</button>' : (perm === 'denied' || perm === 'unsupported' ? '' : '<button class="btn sm primary" data-action="pushon">Turn on notifications</button>')}`;
+  const backup = `<button class="btn sm" data-action="export">Download backup</button>
+      <label class="btn sm" style="text-align:center">Import a backup file<input type="file" id="importFile" accept="application/json,.json" hidden></label>`;
+  $('moreList').innerHTML =
+    moreSec('week', 'This week vs last week', weekHtml()) +
+    moreSec('progress', 'Progress', progressHtml()) +
+    moreSec('alone', 'Real alone time', alone, !!a) +
+    moreSec('step', 'Set my step', step) +
+    moreSec('notif', 'Notifications', notif) +
+    moreSec('backup', 'Backup and import', backup) +
+    `<div class="status" id="dbStatus"></div>
     <div class="status">App version ${APP_VERSION}</div>
     <button class="btn sm" data-action="signout">Sign out</button>`;
 }
+document.addEventListener('toggle', ev => { const d = ev.target; if(d && d.classList && d.classList.contains('msec')){ ui.moreOpen = ui.moreOpen || {}; ui.moreOpen[d.dataset.sec] = d.open; } }, true);
 
 function render(opts){
   if(!session) return;

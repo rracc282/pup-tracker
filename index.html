@@ -248,6 +248,12 @@
   .toggle{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 12px;border:1px solid var(--line);border-radius:12px;}
   .toggle b{display:block;}
   .sumbox{width:100%;min-height:220px;font-family:var(--font-mono);font-size:12px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink);padding:10px;}
+  details.msec{border:1px solid var(--line);border-radius:12px;padding:0 12px;}
+  details.msec > summary{cursor:pointer;list-style:none;display:flex;justify-content:space-between;align-items:center;padding:11px 0;font-weight:600;font-size:14px;}
+  details.msec > summary::-webkit-details-marker{display:none;}
+  details.msec > summary::after{content:"+";font-family:var(--font-mono);color:var(--ink-2);}
+  details.msec[open] > summary::after{content:"–";}
+  details.msec > .stack{padding:0 0 12px;}
   .more-list{display:flex;flex-direction:column;gap:10px;}
   .btn.sm{min-height:44px;font-size:15px;}
   a.btn{color:inherit;}
@@ -396,9 +402,9 @@
 <dialog id="stepsSheet"><div class="stack" id="stepsBody"></div></dialog>
 <dialog id="eodSheet"><div class="stack" id="eodBody"></div></dialog>
 
-<script src="config.js?v=20"></script>
-<script src="supabase.js?v=20"></script>
-<script src="logic.js?v=20"></script>
-<script src="app.js?v=20"></script>
+<script src="config.js?v=21"></script>
+<script src="supabase.js?v=21"></script>
+<script src="logic.js?v=21"></script>
+<script src="app.js?v=21"></script>
 </body>
 </html>
