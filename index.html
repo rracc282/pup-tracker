@@ -237,8 +237,16 @@
   .more-list{display:flex;flex-direction:column;gap:10px;}
   .btn.sm{min-height:44px;font-size:15px;}
   a.btn{color:inherit;}
-  .bar{position:relative;}
-  .bar .skip{position:absolute;top:0;height:100%;background:#E8832F;border-radius:0;}
+  :root{--back:#0E3D31;}
+  @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){--back:#2C7A63;} }
+  :root[data-theme="dark"]{--back:#2C7A63;}
+  .bar{position:relative;overflow:visible;}
+  .bar .barclip{position:absolute;inset:0;border-radius:999px;overflow:hidden;background:transparent;}
+  .bar .barclip #posFill{height:100%;background:var(--accent);transition:width .4s ease;}
+  .bar .seg{position:absolute;top:0;height:100%;border-radius:0;}
+  .bar .skip{background:#E8832F;}
+  .bar .back{background:var(--back);}
+  .bar .mark{position:absolute;top:-5px;width:4px;height:20px;margin-left:-2px;border-radius:2px;background:var(--upset);box-shadow:0 0 0 2px var(--surface);}
   [hidden]{display:none !important;}
 
 </style>
@@ -271,6 +279,7 @@
     <div class="pos-row"><span class="pos-now" id="posNow"></span><span class="pos-step" id="posStep"></span></div>
     <div class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" id="posBar"><div id="posFill"></div></div>
     <div class="pos-next" id="posNext"></div>
+    <div class="pos-next" id="posLegend"></div>
     <div class="pos-note" id="posNote" hidden></div>
   </section>
 
@@ -319,9 +328,9 @@
 <dialog id="daySheet"><div class="stack" id="dayBody"></div></dialog>
 <dialog id="eodSheet"><div class="stack" id="eodBody"></div></dialog>
 
-<script src="config.js?v=8"></script>
-<script src="supabase.js?v=8"></script>
-<script src="logic.js?v=8"></script>
-<script src="app.js?v=8"></script>
+<script src="config.js?v=9"></script>
+<script src="supabase.js?v=9"></script>
+<script src="logic.js?v=9"></script>
+<script src="app.js?v=9"></script>
 </body>
 </html>

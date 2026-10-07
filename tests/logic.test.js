@@ -63,4 +63,23 @@ let st9=L.stateFrom([jump].concat(after.slice(0,2)),'home'); assert.strictEqual(
 assert.strictEqual(L.stateFrom([jump].concat(after),'home').level,10); // 3 calm at step 9 -> advance, same rule as always
 const wob=[rep(9,'mild',{createdAt:t+6e6,level:9}),rep(9,'mild',{createdAt:t+6.1e6,level:9})];
 assert.strictEqual(L.stateFrom([jump].concat(wob),'home').level,8); // two wobbles drop one step, same rule
+// bar info: red marks only for rule-based drops and only until she is past that step; regressions by hand are dark green
+{
+  let tt=9e7, n=0; const r=(step,o,x)=>Object.assign({kind:'dep',place:'home',date:'2026-10-07',id:'b'+(n++),createdAt:(tt+=60000),step,level:step,outcome:o},x||{});
+  const base=[r(0,'calm'),r(0,'calm'),r(1,'calm'),r(1,'calm'),r(2,'calm'),r(2,'calm')]; // now at step 3
+  assert.strictEqual(L.stateFrom(base,'home').level,3);
+  assert.deepStrictEqual(L.barInfo(base,'home').marks,[]);
+  const dropped=base.concat([r(3,'escalated')]); // upset: 3 -> 1
+  assert.strictEqual(L.stateFrom(dropped,'home').level,1);
+  assert.deepStrictEqual(L.barInfo(dropped,'home').marks,[3]);
+  const wob2=base.concat([r(3,'mild'),r(3,'mild')]); // two wobbles: 3 -> 2
+  assert.deepStrictEqual(L.barInfo(wob2,'home').marks,[3]);
+  // manual regression from 3 down to 1 -> dark green 1..3, no red mark
+  const back={kind:'baseline',id:'bk',place:'home',date:'2026-10-07',createdAt:tt+1e5,level:1,from:3,outcome:'baseline'};
+  const bi=L.barInfo(base.concat([back]),'home');
+  assert.deepStrictEqual(bi.regressed,[{from:1,to:3}]); assert.deepStrictEqual(bi.marks,[]); assert.deepStrictEqual(bi.skipped,[]);
+  // forward jump has no dark green and no marks
+  const fwd={kind:'baseline',id:'fw',place:'home',date:'2026-10-07',createdAt:tt+1e5,level:6,from:3,outcome:'baseline'};
+  const fi=L.barInfo(base.concat([fwd]),'home'); assert.deepStrictEqual(fi.skipped,[{from:3,to:6}]); assert.deepStrictEqual(fi.regressed,[]);
+}
 console.log('logic tests ok');

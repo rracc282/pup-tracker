@@ -1,6 +1,6 @@
 // Churro tracker app. Uses logic.js (pure) and Supabase (sync + push queue).
 'use strict';
-const APP_VERSION = '8';
+const APP_VERSION = '9';
 const CFG = window.PT_CONFIG || {};
 const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -262,17 +262,24 @@ function renderPos(){
   $('posNow').textContent = stepLabel(st.level);
   $('posStep').textContent = 'Step ' + (st.level+1) + ' of ' + (TOP+1) + ' · goal 4 h';
   const pct = v => (v / TOP * 100) + '%';
-  const ranges = skippedRanges(ladderEntries(), place);
-  let bar = `<div id="posFill" style="width:${pct(st.level)}"></div>`;
-  ranges.forEach(r => { const to = Math.min(r.to, st.level); if(to > r.from) bar += `<div class="skip" style="left:${pct(r.from)};width:${pct(to - r.from)}"></div>`; });
-  $('posBar').innerHTML = bar;
+  const info = barInfo(ladderEntries(), place);
+  let clip = `<div id="posFill" style="width:${pct(st.level)}"></div>`;
+  info.skipped.forEach(r => { const to = Math.min(r.to, st.level); if(to > r.from) clip += `<div class="seg skip" style="left:${pct(r.from)};width:${pct(to - r.from)}"></div>`; });
+  info.regressed.forEach(r => { clip += `<div class="seg back" style="left:${pct(r.from)};width:${pct(r.to - r.from)}"></div>`; });
+  let marks = '';
+  info.marks.forEach(m => { marks += `<div class="mark" style="left:${pct(m)}" title="Dropped back from here"></div>`; });
+  $('posBar').innerHTML = `<div class="barclip">${clip}</div>${marks}`;
   $('posBar').setAttribute('aria-valuenow', Math.round(st.level / TOP * 100));
   let nextM = null;
   for(let k = st.level + 1; k <= TOP; k++){ if(MILESTONES[k]){ nextM = k; break; } }
   $('posNext').textContent = nextM != null
     ? 'Next milestone: ' + fmtSec(DUR[nextM]) + ' (' + MILESTONES[nextM] + '), ' + (nextM - st.level) + ' step' + (nextM - st.level === 1 ? '' : 's') + ' away.'
     : 'You are at the top of the ladder.';
-  if(ranges.length) $('posNext').textContent += ' Orange on the bar: steps you set by hand, not earned by reps.';
+  const legend = [];
+  if(info.skipped.length) legend.push('Orange: steps you set by hand, not earned by reps.');
+  if(info.regressed.length) legend.push('Dark green: steps you stepped back from, still to re-earn.');
+  if(info.marks.length) legend.push('Red tick: where she needed to drop back. It goes away once she is past it.');
+  $('posLegend').innerHTML = legend.map(t => `<div>${esc(t)}</div>`).join('');
   const note = $('posNote');
   if(st.newPlace){ note.hidden = false; note.textContent = PLACE_NAME[place] + ' is new, so it starts three steps below your Home step. It has its own ladder from here.'; }
   else note.hidden = true;

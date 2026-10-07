@@ -52,7 +52,7 @@ function isLive(e){ return !e.voided; }
 function computeState(depList, startLevel){
   let level = depList.length && depList[0].level != null ? depList[0].level : startLevel;
   let run = 0, wob = 0, nextEasy = false, lastEvent = null;
-  const adv = {};
+  const adv = {}, drops = [];
   for(const e of depList){
     const hard = e.step >= level;
     nextEasy = false; lastEvent = null;
@@ -74,13 +74,13 @@ function computeState(depList, startLevel){
       }
     } else if(e.outcome === 'mild'){
       run = 0; wob++;
-      if(wob >= 2){ level = Math.max(0, level - 1); wob = 0; lastEvent = 'wobbleDrop'; }
+      if(wob >= 2){ const f = level; level = Math.max(0, level - 1); wob = 0; lastEvent = 'wobbleDrop'; if(level < f) drops.push({ from: f, to: level, why: 'wobbles' }); }
       else lastEvent = 'wobble';
     } else if(e.outcome === 'escalated'){
-      level = Math.max(0, level - 2); run = 0; wob = 0; lastEvent = 'upset';
+      { const f = level; level = Math.max(0, level - 2); run = 0; wob = 0; lastEvent = 'upset'; if(level < f) drops.push({ from: f, to: level, why: 'upset' }); }
     }
   }
-  return { level, run, wob, nextEasy, lastEvent, need: need(level) };
+  return { level, run, wob, nextEasy, lastEvent, need: need(level), drops };
 }
 
 // A "baseline" entry says: my step is N from here on (set by hand). Reps before it no longer count.
@@ -97,6 +97,30 @@ function depsFor(list, place){
 function skippedRanges(list, place){
   return list.filter(e => e.kind === 'baseline' && isLive(e) && (e.place || 'home') === place && e.from != null && e.level > e.from)
     .map(e => ({ from: e.from, to: e.level }));
+}
+
+// Everything the progress bar needs besides the current step:
+//  skipped: steps set forward by hand (orange), regressed: steps she stepped back from by hand (dark green, until re-earned),
+//  marks: steps where she dropped back by the rules (wobbles or an upset) and has not yet got past again (red).
+function barInfo(list, place){
+  const st = stateFrom(list, place);
+  const bl = list.filter(e => e.kind === 'baseline' && isLive(e) && (e.place || 'home') === place).sort((a, b) => (a.createdAt||0) - (b.createdAt||0));
+  const skipped = skippedRanges(list, place);
+  const regressed = bl.filter(e => e.from != null && e.level < e.from).map(e => ({ from: e.level, to: e.from }))
+    .map(r => ({ from: Math.max(r.from, st.level), to: r.to })).filter(r => r.to > r.from);
+  const deps = sortedByDate(list.filter(e => e.kind === 'dep' && isLive(e) && !e.medicated && (e.place || 'home') === place));
+  const drops = [];
+  let seg = [];
+  const flush = (start) => { if(seg.length){ const s = computeState(seg, start); (s.drops || []).forEach(d => drops.push(d)); } seg = []; };
+  const bounds = bl.map(b => b.createdAt || 0);
+  let startLevel = deps.length && deps[0].level != null ? deps[0].level : 0, bi = 0;
+  deps.forEach(e => {
+    while(bi < bounds.length && (e.createdAt || 0) > bounds[bi]){ flush(startLevel); startLevel = bl[bi].level; bi++; }
+    seg.push(e);
+  });
+  flush(startLevel);
+  const marks = Array.from(new Set(drops.filter(d => d.from >= st.level).map(d => d.from))).sort((a, b) => a - b);
+  return { skipped, regressed, marks };
 }
 function startFor(list, place){
   const b = baselineFor(list, place);
@@ -270,4 +294,4 @@ function buildSummary(entries, days, date, place){
   return L.join('\n');
 }
 
-if(typeof module !== 'undefined') module.exports = { DUR, TOP, FIRST_OUT, LAST_CUE, QUICK_CEILING, isQuick, STEP_NAMES, CUE_IDS, idOf, indexOfId, stepLabel, stepTag, stepEst, gapSec, fits, need, capFor, sortedByDate, computeState, depsFor, stateFrom, baselineFor, startFor, skippedRanges, levelsAfter, rand01, pickNext, ceilingFor, cooldownMs, waitUntil, coachMsg, normalizeEntry, buildSummary, fmtSec, SESSION_MAX };
+if(typeof module !== 'undefined') module.exports = { DUR, TOP, FIRST_OUT, LAST_CUE, QUICK_CEILING, isQuick, STEP_NAMES, CUE_IDS, idOf, indexOfId, stepLabel, stepTag, stepEst, gapSec, fits, need, capFor, sortedByDate, computeState, depsFor, stateFrom, baselineFor, startFor, skippedRanges, barInfo, levelsAfter, rand01, pickNext, ceilingFor, cooldownMs, waitUntil, coachMsg, normalizeEntry, buildSummary, fmtSec, SESSION_MAX };
