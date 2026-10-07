@@ -1,6 +1,6 @@
 // Churro tracker app. Uses logic.js (pure) and Supabase (sync + push queue).
 'use strict';
-const APP_VERSION = '21';
+const APP_VERSION = '22';
 const CFG = window.PT_CONFIG || {};
 const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -328,7 +328,14 @@ function renderPocket(){
   $('pocketChips').innerHTML = POCKETS.map(([m,l]) => `<button class="chip" data-pocket="${m}" aria-pressed="${pocket===m}" ${ui.mode!=='idle'?'disabled':''}>${l}</button>`).join('');
   $('spotChips').innerHTML = SPOTS.map(s => `<button class="chip" data-spot="${s}" aria-pressed="${spot===s}">${s}</button>`).join('');
 }
+function renderProgressBox(){
+  const el = $('progCard'); if(!el) return;
+  const h = progressHtml();
+  el.hidden = !h;
+  el.innerHTML = h ? '<div class="eyebrow">Progress</div>' + h : '';
+}
 function renderPos(){
+  renderProgressBox();
   const st = stateFrom(ladderEntries(), place);
   $('posNow').textContent = stepLabel(st.level);
   $('posStep').textContent = 'Step ' + (st.level+1) + ' of ' + (TOP+1) + ' · goal 4 h';
@@ -623,6 +630,8 @@ function weekHtml(){
     </table><div class="hint">Medicated and voided reps do not count toward the ladder, but are included in the rep counts.</div>`;
 }
 function progressHtml(){
+  const st0 = stateFrom(ladderEntries(), place);
+  if(st0.level < FIRST_OUT) return '';
   const s = progressSeries(liveEntries(), place);
   if(!s || s.length < 2) return s ? '<div class="hint">The line appears after a second day of training.</div>' : '';
   const W = 300, H = 90, P = 6;
@@ -657,7 +666,6 @@ function renderMore(){
       <label class="btn sm" style="text-align:center">Import a backup file<input type="file" id="importFile" accept="application/json,.json" hidden></label>`;
   $('moreList').innerHTML =
     moreSec('week', 'This week vs last week', weekHtml()) +
-    moreSec('progress', 'Progress', progressHtml()) +
     moreSec('alone', 'Real alone time', alone, !!a) +
     moreSec('step', 'Set my step', step) +
     moreSec('notif', 'Notifications', notif) +
