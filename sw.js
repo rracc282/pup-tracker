@@ -1,5 +1,5 @@
 // Service worker: offline shell + push notifications.
-const CACHE = 'churro-v7';
+const CACHE = 'churro-v8';
 const SHELL = ['./', 'index.html', 'app.js', 'logic.js', 'config.js', 'supabase.js', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting())); });
 self.addEventListener('activate', e => {

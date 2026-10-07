@@ -53,4 +53,14 @@ assert.strictEqual(L.stateFrom([rep(0,'calm'),rep(0,'calm'),bl],'home').level,9)
 assert.strictEqual(L.stateFrom([bl,afterBase],'home').run,1);
 assert.strictEqual(L.stateFrom([rep(0,'calm'),rep(0,'calm'),bl],'zurich').level,6);
 assert.strictEqual(L.stateFrom([bl],'zurich').newPlace,false===false?true:false);
+// manual forward jump: orange range recorded, then the normal rules continue from the new step
+const jump={kind:'baseline',id:'jp',place:'home',date:'2026-10-07',createdAt:t+5e6,level:9,from:6,outcome:'baseline'};
+assert.deepStrictEqual(L.skippedRanges([jump],'home'),[{from:6,to:9}]);
+assert.deepStrictEqual(L.skippedRanges([Object.assign({},jump,{level:4})],'home'),[]);
+assert.deepStrictEqual(L.skippedRanges([Object.assign({},jump,{voided:true})],'home'),[]);
+const after=[1,2,3].map(i=>rep(9,'calm',{createdAt:t+5e6+i*60000,level:9}));
+let st9=L.stateFrom([jump].concat(after.slice(0,2)),'home'); assert.strictEqual(st9.level,9); assert.strictEqual(st9.run,2);
+assert.strictEqual(L.stateFrom([jump].concat(after),'home').level,10); // 3 calm at step 9 -> advance, same rule as always
+const wob=[rep(9,'mild',{createdAt:t+6e6,level:9}),rep(9,'mild',{createdAt:t+6.1e6,level:9})];
+assert.strictEqual(L.stateFrom([jump].concat(wob),'home').level,8); // two wobbles drop one step, same rule
 console.log('logic tests ok');

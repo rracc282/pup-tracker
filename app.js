@@ -1,6 +1,6 @@
 // Churro tracker app. Uses logic.js (pure) and Supabase (sync + push queue).
 'use strict';
-const APP_VERSION = '7';
+const APP_VERSION = '8';
 const CFG = window.PT_CONFIG || {};
 const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -261,13 +261,18 @@ function renderPos(){
   const st = stateFrom(ladderEntries(), place);
   $('posNow').textContent = stepLabel(st.level);
   $('posStep').textContent = 'Step ' + (st.level+1) + ' of ' + (TOP+1) + ' · goal 4 h';
-  $('posFill').style.width = (st.level / TOP * 100) + '%';
+  const pct = v => (v / TOP * 100) + '%';
+  const ranges = skippedRanges(ladderEntries(), place);
+  let bar = `<div id="posFill" style="width:${pct(st.level)}"></div>`;
+  ranges.forEach(r => { const to = Math.min(r.to, st.level); if(to > r.from) bar += `<div class="skip" style="left:${pct(r.from)};width:${pct(to - r.from)}"></div>`; });
+  $('posBar').innerHTML = bar;
   $('posBar').setAttribute('aria-valuenow', Math.round(st.level / TOP * 100));
   let nextM = null;
   for(let k = st.level + 1; k <= TOP; k++){ if(MILESTONES[k]){ nextM = k; break; } }
   $('posNext').textContent = nextM != null
     ? 'Next milestone: ' + fmtSec(DUR[nextM]) + ' (' + MILESTONES[nextM] + '), ' + (nextM - st.level) + ' step' + (nextM - st.level === 1 ? '' : 's') + ' away.'
     : 'You are at the top of the ladder.';
+  if(ranges.length) $('posNext').textContent += ' Orange on the bar: steps you set by hand, not earned by reps.';
   const note = $('posNote');
   if(st.newPlace){ note.hidden = false; note.textContent = PLACE_NAME[place] + ' is new, so it starts three steps below your Home step. It has its own ladder from here.'; }
   else note.hidden = true;
@@ -827,7 +832,7 @@ document.addEventListener('click', ev => {
       putEntry({ v:3, id: uuid(), kind:'alone', date: todayStr(), createdAt: Date.now(), minutes: m, outcome: ui.alone.outcome, notes: $('aloneNote').value.trim() });
       ui.alone = null; render({ rep:true }); setStatus('Logged.'); break;
     }
-    case 'setbase': { const lv = parseInt($('baseSel').value, 10); if(!confirm('Set your step for ' + PLACE_NAME[place] + ' to: ' + stepLabel(lv) + '? Reps before now stop counting toward the ladder.')) break; putEntry({ v:3, id: uuid(), kind:'baseline', place, date: todayStr(), createdAt: Date.now(), level: lv, outcome:'baseline', notes:'' }); render({ rep:true }); setStatus('Step set.'); break; }
+    case 'setbase': { const lv = parseInt($('baseSel').value, 10); if(!confirm('Set your step for ' + PLACE_NAME[place] + ' to: ' + stepLabel(lv) + '? Reps before now stop counting toward the ladder.')) break; putEntry({ v:3, id: uuid(), kind:'baseline', place, date: todayStr(), createdAt: Date.now(), level: lv, from: stateFrom(ladderEntries(), place).level, outcome:'baseline', notes:'' }); render({ rep:true }); setStatus('Step set.'); break; }
     case 'pushon': enablePush(); break;
     case 'pushtest': testPush(); break;
     case 'export': exportBackup(); break;
