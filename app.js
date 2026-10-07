@@ -1,6 +1,6 @@
 // Churro tracker app. Uses logic.js (pure) and Supabase (sync + push queue).
 'use strict';
-const APP_VERSION = '6';
+const APP_VERSION = '7';
 const CFG = window.PT_CONFIG || {};
 const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -159,6 +159,13 @@ async function qCancelId(id){
   if(!id || !sb || !online) return;
   try{ await sb.from('pt_queue').update({ cancelled:true }).eq('id', id); }catch(e){}
 }
+const READY_MSGS = [
+  ['Ready for the next rep! 🐾', 'Churro has had her rest. Come back, let us go!'],
+  ['Rest time is over 🎉', 'Ready when you are. Next rep is waiting.'],
+  ['Back to it, team Churro!', 'She is rested and the next rep is ready.'],
+  ['Let us go! 🐶', 'Next rep is unlocked. Come on back.'],
+  ['Ding ding! Round two', 'The break is done. Ready for another one?']
+];
 function scheduleReady(){
   qCancelKind('ready').then(() => {
     const live = liveEntries().filter(e => e.kind === 'dep');
@@ -169,7 +176,8 @@ function scheduleReady(){
     const st = stateFrom(liveEntries(), place);
     const nx = pickNext(st, pocket, place + '|' + depsFor(liveEntries(), place).length + '|' + st.level);
     if(capReached(nx.step)) return;
-    qInsert({ fire_at: new Date(w.until).toISOString(), kind:'ready', tag:'ready', title:'Next rep is ready', body:'She has had her rest. Open the tracker.', open:'' });
+    const m = READY_MSGS[Math.floor(Math.random() * READY_MSGS.length)];
+    qInsert({ fire_at: new Date(w.until).toISOString(), kind:'ready', tag:'ready', title:m[0], body:m[1], open:'' });
   });
 }
 
@@ -670,7 +678,7 @@ async function goOut(){
   saveActive(); startTicking(); render({ rep:true });
   const target = DUR[r.step];
   if(target > 300){
-    const id = await qInsert({ fire_at: new Date(r.startedAt + target * 1000).toISOString(), kind:'timeup', tag:'timeup', urgent:true, title:'Time is up', body:'Go back in calmly. ' + stepLabel(r.step) + '.', open:'' });
+    const id = await qInsert({ fire_at: new Date(r.startedAt + target * 1000).toISOString(), kind:'timeup', tag:'timeup', urgent:true, title:'Time is up! ⏰', body:'Come back in calmly, no big hello. ' + stepLabel(r.step) + ' done.', open:'' });
     if(id && ui.rep){ ui.rep.queueId = id; saveActive(); }
   }
 }
@@ -729,7 +737,7 @@ async function enablePush(){
   }catch(e){ setStatus('Could not turn on notifications: ' + (e && e.message || e)); }
 }
 async function testPush(){
-  const id = await qInsert({ fire_at: new Date().toISOString(), kind:'test', tag:'test', urgent:true, title:'Churro test', body:'If you see this, notifications work.', open:'' });
+  const id = await qInsert({ fire_at: new Date().toISOString(), kind:'test', tag:'test', urgent:true, title:'Woof! 🐕 It works', body:'Notifications are on. Churro approves.', open:'' });
   setStatus(id ? 'Test queued. It should arrive within a minute.' : 'Could not queue the test. Are you online?');
 }
 

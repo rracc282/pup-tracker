@@ -29,14 +29,14 @@ function recurringDue(o: {
   const out: { key: string; title: string; body: string; open: string; tag: string }[] = [];
   const m = o.minutes;
   if (!o.dayType && m >= 7 * 60 && m < 7 * 60 + 30) {
-    out.push({ key: `morning:${o.date}`, title: "Good morning", body: "What kind of day is it for Churro? Home, Sitter or Weekend.", open: "day", tag: "morning" });
+    out.push({ key: `morning:${o.date}`, title: "Good morning! ☀️", body: "What kind of day is it for Churro? Tap to pick Home, Sitter or Weekend.", open: "day", tag: "morning" });
   }
   const at = o.dayType ? REMINDER_AT[o.dayType] : undefined;
   if (at !== undefined && o.liveReps === 0 && m >= at && m < at + 30) {
-    out.push({ key: `remind:${o.date}`, title: "Training time", body: "No reps logged yet today. A short one is enough.", open: "", tag: "remind" });
+    out.push({ key: `remind:${o.date}`, title: "Ready to train? 🐾", body: "No reps yet today. Even one quick one counts.", open: "", tag: "remind" });
   }
   if (o.liveReps >= 1 && m >= 22 * 60 && m < 22 * 60 + 30) {
-    out.push({ key: `eod:${o.date}`, title: "Today's summary", body: "Tap to get the day's summary and paste it to Claude.", open: "eod", tag: "eod" });
+    out.push({ key: `eod:${o.date}`, title: "Day done! 🌙", body: "Tap for today's summary to share with Claude.", open: "eod", tag: "eod" });
   }
   return out;
 }
