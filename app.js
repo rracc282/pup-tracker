@@ -1,6 +1,6 @@
 // Churro tracker app. Uses logic.js (pure) and Supabase (sync + push queue).
 'use strict';
-const APP_VERSION = '14';
+const APP_VERSION = '15';
 const CFG = window.PT_CONFIG || {};
 const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -285,7 +285,7 @@ function waitInfo(){
   const w = waitUntil(liveEntries().filter(e => e.kind === 'dep'));
   if(!w) return null;
   const remaining = w.until - Date.now();
-  return remaining > 0 ? { remaining, until: w.until, reason: w.reason } : null;
+  return remaining > 0 ? { remaining, until: w.until, reason: w.reason, run: w.run, breakMin: w.breakMin } : null;
 }
 function ladderEntries(){ return liveEntries(); }  // depsFor() further drops medicated reps
 
@@ -429,7 +429,7 @@ function bannersHtml(step){
   const w = waitInfo();
   if(w){
     const msg = w.reason === 'upset' ? 'Pause after a rough rep. A few hours or tomorrow is better.'
-      : w.reason === 'session' ? 'That was a full session of 5. Take an hour off.'
+      : w.reason === 'session' ? `That was a full session of ${w.run}. Take about ${w.breakMin >= 60 ? (w.breakMin === 60 ? 'an hour' : Math.floor(w.breakMin/60) + ' h ' + (w.breakMin % 60) + ' min') : w.breakMin + ' min'} off. She can be with you.`
       : 'Let her settle. Quiet time or a chew is fine. Skipping the wait gives her less time to recover.';
     h += `<div class="wait"><div class="wait-top"><b>Next rep in <span id="waitClock">${clockStr(w.remaining / 1000)}</span></b><span class="hint">at ${fmtTime(w.until)}</span></div><div class="hint">${msg}</div>${pushOn ? '<div class="hint">You will get a notification when it is time.</div>' : ''}</div>`;
   }

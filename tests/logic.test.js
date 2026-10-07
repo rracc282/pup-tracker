@@ -31,7 +31,13 @@ let w=L.waitUntil([rep(0,'calm')]); assert.strictEqual(w.until-w.until+120000,12
 let a=rep(0,'calm'); assert.strictEqual(L.waitUntil([a]).until,a.createdAt+120000);
 a=rep(0,'mild'); assert.strictEqual(L.waitUntil([a]).until,a.createdAt+240000);
 a=rep(0,'escalated'); assert.strictEqual(L.waitUntil([a]).until,a.createdAt+3*3600000);
-const five=[0,1,2,3,4].map(()=>rep(0,'calm')); assert.strictEqual(L.waitUntil(five).reason,'session');
+const base=Date.now(); const mkRun=n=>Array.from({length:n},(_,i)=>Object.assign(rep(0,'calm'),{createdAt:base+i*300000}));
+const sz=L.sessionSizeFor(base); assert(sz>=3&&sz<=6);
+assert.strictEqual(L.waitUntil(mkRun(sz)).reason,'session');
+if(sz>3) assert.notStrictEqual(L.waitUntil(mkRun(sz-1)).reason,'session');
+const bm=L.waitUntil(mkRun(sz)).breakMin; assert(bm>=45&&bm<=90&&bm%5===0);
+const seen=new Set(), seenB=new Set(); for(let k=0;k<300;k++){ seen.add(L.sessionSizeFor(base+k*60000)); seenB.add(L.breakMinFor(base+k*60000)); }
+assert(seen.size===4&&seenB.size===10);
 // pickNext never harder than working step; wobble forces easier
 for(let k=0;k<200;k++){
   const st={level:20,lastEvent:'calmProgress',run:1,need:2,wob:0,nextEasy:false};

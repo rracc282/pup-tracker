@@ -1,4 +1,4 @@
-# Churro's Calm Steps (PWA)
+# Churro independence training (PWA)
 
 Static site on GitHub Pages + Supabase (auth, database, realtime, push queue).
 

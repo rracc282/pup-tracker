@@ -193,7 +193,12 @@ function cooldownMs(e){
   if(e.outcome === 'mild') sec *= 2;
   return sec * 1000;
 }
-const SESSION_MAX = 5, SESSION_GAP_MS = 45 * 60 * 1000, SESSION_BREAK_MS = 60 * 60 * 1000;
+// Sessions vary on purpose so the day is not a fixed script: 3 to 6 reps, then a 45 to 90 min break.
+// Both are derived from timestamps, so every device agrees and a reload does not change them.
+const SESSION_MIN = 3, SESSION_MAX = 6, SESSION_GAP_MS = 45 * 60 * 1000;
+function hash01(n){ let x = (Math.floor(n / 1000) ^ 0x9e3779b9) >>> 0; x = Math.imul(x ^ (x >>> 16), 0x45d9f3b) >>> 0; x = Math.imul(x ^ (x >>> 16), 0x45d9f3b) >>> 0; x = (x ^ (x >>> 16)) >>> 0; return x / 4294967296; }
+function sessionSizeFor(startTs){ return SESSION_MIN + Math.floor(hash01(startTs) * (SESSION_MAX - SESSION_MIN + 1)); }
+function breakMinFor(lastTs){ return 45 + 5 * Math.floor(hash01(lastTs + 7919) * 10); }
 // depAll: every live ladder rep, any place. Returns null when no rep has been done yet.
 function waitUntil(depAll){
   if(!depAll.length) return null;
@@ -205,11 +210,13 @@ function waitUntil(depAll){
   for(let i = list.length - 1; i > 0; i--){
     if((list[i].createdAt - list[i-1].createdAt) < SESSION_GAP_MS) run++; else break;
   }
-  if(run >= SESSION_MAX && last.outcome !== 'escalated'){
-    const brk = (last.createdAt || 0) + SESSION_BREAK_MS;
+  const size = sessionSizeFor(list[list.length - run].createdAt || 0);
+  const breakMin = breakMinFor(last.createdAt || 0);
+  if(run >= size && last.outcome !== 'escalated'){
+    const brk = (last.createdAt || 0) + breakMin * 60 * 1000;
     if(brk > until){ until = brk; reason = 'session'; }
   }
-  return { until, run, reason };
+  return { until, run, reason, size, breakMin };
 }
 
 function coachMsg(ev, st){
@@ -294,4 +301,4 @@ function buildSummary(entries, days, date, place){
   return L.join('\n');
 }
 
-if(typeof module !== 'undefined') module.exports = { DUR, TOP, FIRST_OUT, LAST_CUE, QUICK_CEILING, isQuick, STEP_NAMES, CUE_IDS, idOf, indexOfId, stepLabel, stepTag, stepEst, gapSec, fits, need, capFor, sortedByDate, computeState, depsFor, stateFrom, baselineFor, startFor, skippedRanges, barInfo, levelsAfter, rand01, pickNext, ceilingFor, cooldownMs, waitUntil, coachMsg, normalizeEntry, buildSummary, fmtSec, SESSION_MAX };
+if(typeof module !== 'undefined') module.exports = { DUR, TOP, FIRST_OUT, LAST_CUE, QUICK_CEILING, isQuick, STEP_NAMES, CUE_IDS, idOf, indexOfId, stepLabel, stepTag, stepEst, gapSec, fits, need, capFor, sortedByDate, computeState, depsFor, stateFrom, baselineFor, startFor, skippedRanges, barInfo, levelsAfter, rand01, pickNext, ceilingFor, cooldownMs, waitUntil, coachMsg, normalizeEntry, buildSummary, fmtSec, SESSION_MIN, SESSION_MAX, sessionSizeFor, breakMinFor };
