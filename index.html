@@ -284,9 +284,12 @@
   </section>
 
   <section class="card" id="pocketCard">
-    <span class="label">How long do you have?</span>
-    <div class="chips" id="pocketChips" role="group" aria-label="Time available"></div>
-    <span class="label" style="margin-top:12px">Where is she?</span>
+    <div id="pocketBlock" hidden>
+      <span class="label">How long do you have?</span>
+      <div class="chips" id="pocketChips" role="group" aria-label="Time available"></div>
+      <div class="hint" style="margin:6px 0 12px">Her steps are getting longer, so this now decides which rep you get.</div>
+    </div>
+    <span class="label">Where is she?</span>
     <div class="chips" id="spotChips" role="group" aria-label="Her spot"></div>
   </section>
 
@@ -328,9 +331,9 @@
 <dialog id="daySheet"><div class="stack" id="dayBody"></div></dialog>
 <dialog id="eodSheet"><div class="stack" id="eodBody"></div></dialog>
 
-<script src="config.js?v=9"></script>
-<script src="supabase.js?v=9"></script>
-<script src="logic.js?v=9"></script>
-<script src="app.js?v=9"></script>
+<script src="config.js?v=10"></script>
+<script src="supabase.js?v=10"></script>
+<script src="logic.js?v=10"></script>
+<script src="app.js?v=10"></script>
 </body>
 </html>

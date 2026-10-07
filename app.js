@@ -1,6 +1,6 @@
 // Churro tracker app. Uses logic.js (pure) and Supabase (sync + push queue).
 'use strict';
-const APP_VERSION = '9';
+const APP_VERSION = '10';
 const CFG = window.PT_CONFIG || {};
 const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -43,6 +43,9 @@ let place = lsGet('pt-place') || 'home'; if(!PLACE_NAME[place]) place = 'home';
 let pocket = parseInt(lsGet('pt-pocket'), 10) || 15;
 let spot = lsGet('pt-spot') || '';
 let ui = { mode:'idle', rep:null, feedback:null, showAll:false, confirmDel:null, editId:null, override:false, alone:null };
+// "How long do you have?" only matters once the working step no longer fits the shortest option.
+function pocketMatters(st){ return !fits(st.level, POCKETS[0][0]); }
+function effPocket(st){ return pocketMatters(st) ? pocket : POCKETS[POCKETS.length - 1][0]; }
 let tickTimer = null, wakeLock = null, audio = null, pushOn = false;
 
 // ---------- data mapping ----------
@@ -174,7 +177,7 @@ function scheduleReady(){
     const last = live.slice().sort((a,b) => a.createdAt - b.createdAt).pop();
     if(last.outcome === 'escalated') return;
     const st = stateFrom(liveEntries(), place);
-    const nx = pickNext(st, pocket, place + '|' + depsFor(liveEntries(), place).length + '|' + st.level);
+    const nx = pickNext(st, effPocket(st), place + '|' + depsFor(liveEntries(), place).length + '|' + st.level);
     if(capReached(nx.step)) return;
     const m = READY_MSGS[Math.floor(Math.random() * READY_MSGS.length)];
     qInsert({ fire_at: new Date(w.until).toISOString(), kind:'ready', tag:'ready', title:m[0], body:m[1], open:'' });
@@ -254,6 +257,7 @@ function renderPlace(){
   $('placeChips').innerHTML = PLACES.map(([k,l]) => `<button class="chip" data-place="${k}" aria-pressed="${place===k}" ${ui.mode!=='idle'?'disabled':''}>${l}</button>`).join('');
 }
 function renderPocket(){
+  $('pocketBlock').hidden = !pocketMatters(stateFrom(ladderEntries(), place));
   $('pocketChips').innerHTML = POCKETS.map(([m,l]) => `<button class="chip" data-pocket="${m}" aria-pressed="${pocket===m}" ${ui.mode!=='idle'?'disabled':''}>${l}</button>`).join('');
   $('spotChips').innerHTML = SPOTS.map(s => `<button class="chip" data-spot="${s}" aria-pressed="${spot===s}">${s}</button>`).join('');
 }
@@ -403,7 +407,7 @@ function renderRep(){
   if(ui.mode === 'idle'){
     const live = ladderEntries();
     const st = stateFrom(live, place);
-    const nx = pickNext(st, pocket, place + '|' + depsFor(live, place).length + '|' + st.level);
+    const nx = pickNext(st, effPocket(st), place + '|' + depsFor(live, place).length + '|' + st.level);
     let sub;
     if(nx.fitted) sub = 'A shorter practice rep that fits your time. Your working step is ' + stepLabel(st.level) + '.';
     else if(nx.kind === 'decoy') sub = 'No leaving this time. These keep the cues from always meaning you are going.';
@@ -411,7 +415,7 @@ function renderRep(){
     else if(nx.easy) sub = 'Shorter or easier on purpose, to keep her confident. Your working step is ' + stepLabel(st.level) + '.';
     else sub = 'Working step · ' + st.run + ' of ' + st.need + ' calm in a row.';
     const capLeft = Math.max(1, catLimit(nx.step) - catCount(nx.step));
-    const fitN = Math.min(SESSION_MAX, capLeft, Math.max(1, Math.floor(pocket * 60 / (stepEst(nx.step) + gapSec(nx.step)))));
+    const fitN = pocketMatters(st) ? Math.min(SESSION_MAX, capLeft, Math.max(1, Math.floor(pocket * 60 / (stepEst(nx.step) + gapSec(nx.step))))) : 1;
     const blocked = (!!waitInfo() || capReached(nx.step)) && !ui.override;
     const keep = ui.feedback ? feedbackHtml() : '';
     el.innerHTML = keep + bannersHtml(nx.step) +
