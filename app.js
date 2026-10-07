@@ -1,6 +1,6 @@
 // Churro tracker app. Uses logic.js (pure) and Supabase (sync + push queue).
 'use strict';
-const APP_VERSION = '22';
+const APP_VERSION = '23';
 const CFG = window.PT_CONFIG || {};
 const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -279,25 +279,33 @@ function openSteps(){
 }
 
 // ---------- end of day ----------
+function claudeUrl(){
+  const u = (lsGet('pt-claude-url') || '').trim();
+  return /^https:\/\/claude\.ai\//.test(u) ? u : 'https://claude.ai/new';
+}
 function openEod(){
-  const text = buildSummary(entries, days, todayStr(), place);
   $('eodBody').innerHTML = `<h2>End of day</h2>
-    <div class="hint">Add how the day felt to you. Dictate with the mic on your keyboard. Then copy and paste it to Claude.</div>
-    <textarea class="note" id="eodExtra" placeholder="How did the day feel? Anything odd? Questions for Claude?"></textarea>
-    <textarea class="sumbox" id="eodText" readonly></textarea>
-    <button class="btn primary" data-action="eodcopy">Copy summary</button>
-    <a class="btn" style="text-align:center;text-decoration:none" href="https://claude.ai/new" target="_blank" rel="noopener">Open Claude</a>
+    <label class="label" for="eodExtra">Any questions or anything to add about today?</label>
+    <textarea class="note" id="eodExtra" placeholder="Optional. Dictate with the mic on your keyboard."></textarea>
+    <button class="btn primary" data-action="eodsend">Request feedback</button>
+    <div class="hint">Copies today's summary and opens Claude. Paste it into a new chat and send.</div>
     <div class="status" id="eodStatus"></div>
     <button class="btn" data-action="closesheet">Close</button>`;
-  const upd = () => { $('eodText').value = text + ($('eodExtra').value.trim() ? '\n\nMy notes on the day: ' + $('eodExtra').value.trim() : ''); };
-  upd(); $('eodExtra').addEventListener('input', upd);
   if(!$('eodSheet').open) $('eodSheet').showModal();
 }
-async function copyEod(){
-  const t = $('eodText'); t.focus(); t.select();
+function sendEod(){
+  // copy synchronously so it still counts as part of the tap, then open Claude
+  const extra = ($('eodExtra').value || '').trim();
+  const text = buildSummary(entries, days, todayStr(), place) + (extra ? '\n\nMy notes and questions: ' + extra : '');
   let ok = false;
-  try{ await navigator.clipboard.writeText(t.value); ok = true; }catch(e){ try{ ok = document.execCommand('copy'); }catch(_){} }
-  $('eodStatus').textContent = ok ? 'Copied. Paste it into a chat with Claude.' : 'Select the text and copy it by hand.';
+  const ta = document.createElement('textarea');
+  ta.value = text; ta.setAttribute('readonly', ''); ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0;font-size:16px;';
+  ($('eodSheet').open ? $('eodSheet') : document.body).appendChild(ta); ta.focus(); ta.select(); ta.setSelectionRange(0, text.length);
+  try{ ok = document.execCommand('copy'); }catch(e){}
+  ta.remove();
+  if(!ok){ try{ navigator.clipboard.writeText(text); ok = true; }catch(e){} }
+  $('eodStatus').textContent = ok ? 'Copied. Paste it into the chat and send.' : 'Could not copy. Tap again.';
+  if(ok) window.open(claudeUrl(), '_blank', 'noopener');
 }
 function openMore(){ const m = $('moreCard'); if(m){ m.open = true; m.scrollIntoView({ behavior:'smooth', block:'start' }); } }
 function maybeDeepLink(){
@@ -668,6 +676,7 @@ function renderMore(){
     moreSec('week', 'This week vs last week', weekHtml()) +
     moreSec('alone', 'Real alone time', alone, !!a) +
     moreSec('step', 'Set my step', step) +
+    moreSec('claude', 'Claude link', `<div class="hint">Optional. Paste the web address of your Churro project from your Claude account (open the project, copy the address). "Request feedback" will open it. Leave empty to open a new chat.</div><input class="txt" id="claudeUrl" type="url" placeholder="https://claude.ai/project/..." value="${esc(lsGet('pt-claude-url') || '')}"><button class="btn sm" data-action="saveclaudeurl">Save link</button>`) +
     moreSec('notif', 'Notifications', notif) +
     moreSec('backup', 'Backup and import', backup) +
     `<div class="status" id="dbStatus"></div>
@@ -961,7 +970,8 @@ document.addEventListener('click', ev => {
       openDaySheet(); render({ rep:true }); break;
     case 'closesheet': $('daySheet').close(); $('eodSheet').close(); $('stepsSheet').close(); break;
     case 'eod': openEod(); break;
-    case 'eodcopy': copyEod(); break;
+    case 'eodsend': sendEod(); break;
+    case 'saveclaudeurl': { const v = ($('claudeUrl').value || '').trim(); if(v && !/^https:\/\/claude\.ai\//.test(v)){ setStatus('That does not look like a claude.ai link.'); break; } lsSet('pt-claude-url', v); setStatus(v ? 'Saved.' : 'Cleared. It will open a new chat.'); break; }
     case 'aloneopen': ui.alone = { minutes:'', outcome:'calm', notes:'' }; renderMore(); break;
     case 'alonetraz': ui.alone.minutes = $('aloneMin').value; ui.alone.notes = $('aloneNote').value; ui.alone.trazodone = !ui.alone.trazodone; renderMore(); break;
     case 'aloneclose': ui.alone = null; renderMore(); break;
