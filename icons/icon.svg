@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="126 66 356 356">
+  <defs>
+    <path id="head" d="M40 580 C90 470 150 350 175 300 C182 260 188 215 210 190 C235 162 280 160 304 186 C316 200 330 212 360 224 C392 236 422 250 440 262 C456 272 458 292 444 300 C430 308 400 308 372 302 C340 300 318 312 302 332 C286 352 274 400 270 450 C284 500 330 540 350 580 Z"/>
+    <clipPath id="clipHead"><use href="#head"/></clipPath>
+  </defs>
+  <rect width="512" height="512" fill="#CFE4D8"/>
+  <g transform="translate(236 262) scale(1.1) translate(-262 -330)">
+    <use href="#head" fill="#4A2A1D"/>
+    <g clip-path="url(#clipHead)">
+      <ellipse cx="402" cy="294" rx="62" ry="19" fill="#B97D4B"/>
+      <ellipse cx="276" cy="372" rx="22" ry="52" fill="#B97D4B"/>
+    </g>
+    <!-- ear -->
+    <path d="M222 190 C190 196 176 250 184 320 C190 366 222 378 242 350 C264 320 264 250 254 214 C248 192 234 186 222 190 Z" fill="#2F1A12"/>
+    <path d="M214 214 C196 246 192 300 198 340" fill="none" stroke="#4A2A1D" stroke-width="5" stroke-linecap="round" opacity=".55"/>
+    <!-- eyebrow spot, eye, nose -->
+    <ellipse cx="308" cy="206" rx="13" ry="7.5" fill="#B97D4B" transform="rotate(-14 308 206)"/>
+    <ellipse cx="444" cy="284" rx="16" ry="14" fill="#150C08"/>
+    <ellipse cx="438" cy="278" rx="5.5" ry="3.4" fill="#fff" opacity=".35" transform="rotate(-25 438 278)"/>
+  </g>
+  
+  <!-- relaxed happy eye, smile, blush (screen coordinates) -->
+  <path d="M270 156 Q284 138 298 156" fill="none" stroke="#150C08" stroke-width="6" stroke-linecap="round"/>
+  <!-- butterfly resting on the nose -->
+  <g transform="translate(428 187) rotate(-10) scale(.66)">
+    <path d="M-1 -16 L-7 4 M1 -16 L7 4" stroke="#2F1A12" stroke-width="2.6" stroke-linecap="round" fill="none" transform="translate(0 6)"/>
+    <path d="M0 -2 C-12 -50 -66 -50 -58 -12 C-55 8 -18 10 0 -2 Z" fill="#E9855B"/>
+    <path d="M0 -2 C12 -50 66 -50 58 -12 C55 8 18 10 0 -2 Z" fill="#E9855B"/>
+    <path d="M0 4 C-10 30 -40 30 -34 12 C-31 4 -14 2 0 4 Z" fill="#F2B84B"/>
+    <path d="M0 4 C10 30 40 30 34 12 C31 4 14 2 0 4 Z" fill="#F2B84B"/>
+    <circle cx="-34" cy="-24" r="6" fill="#F7EFE2" opacity=".85"/><circle cx="34" cy="-24" r="6" fill="#F7EFE2" opacity=".85"/>
+    <path d="M0 -20 L0 16" stroke="#2F1A12" stroke-width="5.5" stroke-linecap="round"/>
+    <path d="M0 -20 C-4 -32 -12 -36 -17 -34 M0 -20 C4 -32 12 -36 17 -34" fill="none" stroke="#2F1A12" stroke-width="2.6" stroke-linecap="round"/>
+  </g>
+</svg>
