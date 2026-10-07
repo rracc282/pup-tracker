@@ -1,6 +1,6 @@
 // Churro tracker app. Uses logic.js (pure) and Supabase (sync + push queue).
 'use strict';
-const APP_VERSION = '16';
+const APP_VERSION = '17';
 const CFG = window.PT_CONFIG || {};
 const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -246,6 +246,20 @@ function openDaySheet(){
       <button class="chip" id="medToggle" data-action="medtoggle" aria-pressed="${isMedicated()}">${isMedicated() ? 'Yes' : 'No'}</button></div>
     <button class="btn" data-action="closesheet">Done</button>`;
   if(!$('daySheet').open) $('daySheet').showModal();
+}
+
+// ---------- step legend (opens when the position card is tapped) ----------
+function openSteps(){
+  const st = stateFrom(ladderEntries(), place);
+  let html = '<h2>All steps</h2>', last = '';
+  for(let i = 0; i <= TOP; i++){
+    const g = stepTag(i);
+    if(g !== last){ html += `<div class="stephead">${esc(g)}</div>`; last = g; }
+    html += `<div class="steprow${i === st.level ? ' now' : ''}"><span class="n">${i + 1}</span><span>${esc(stepLabel(i))}${i === st.level ? ' (now)' : ''}</span></div>`;
+  }
+  html += '<button class="btn" data-action="closesheet">Close</button>';
+  $('stepsBody').innerHTML = html;
+  if(!$('stepsSheet').open) $('stepsSheet').showModal();
 }
 
 // ---------- end of day ----------
@@ -866,11 +880,12 @@ document.addEventListener('click', ev => {
     case 'editsave': { const e = repMap.get(t.dataset.id); const n = $('editNote'); if(e && n) putEntry(Object.assign({}, e, { notes: n.value.trim() })); ui.editId = null; render({ rep:true }); break; }
     case 'del': { const id = t.dataset.id; if(ui.confirmDel !== id){ ui.confirmDel = id; renderLog(); } else { ui.confirmDel = null; ui.editId = null; removeEntry(id); render({ rep:true }); } break; }
     case 'daysheet': openDaySheet(); break;
+    case 'steps': openSteps(); break;
     case 'medtoggle': putDay(todayStr(), { medicated: !isMedicated() });
       // stamp today's existing reps so the ladder ignores (or counts) them consistently
       liveEntries().filter(e => e.kind === 'dep' && e.date === todayStr()).forEach(e => { const m = isMedicated(); if(!!e.medicated !== m) putEntry(Object.assign({}, e, { medicated: m })); });
       openDaySheet(); render({ rep:true }); break;
-    case 'closesheet': $('daySheet').close(); $('eodSheet').close(); break;
+    case 'closesheet': $('daySheet').close(); $('eodSheet').close(); $('stepsSheet').close(); break;
     case 'eod': openEod(); break;
     case 'eodcopy': copyEod(); break;
     case 'aloneopen': ui.alone = { minutes:'', outcome:'calm', notes:'' }; renderMore(); break;
@@ -937,3 +952,5 @@ async function boot(){
   }, 1000);
 }
 boot();
+document.addEventListener('keydown', ev => { const c = ev.target && ev.target.id === 'posCard'; if(c && (ev.key === 'Enter' || ev.key === ' ')){ ev.preventDefault(); openSteps(); } });
+document.addEventListener('click', ev => { if(ev.target.closest('#posCard') && !ev.target.closest('button')) openSteps(); });

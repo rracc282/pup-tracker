@@ -227,6 +227,10 @@
   .edit{margin-top:8px;padding:10px;border-radius:12px;background:var(--bg);display:flex;flex-direction:column;gap:10px;}
   dialog{border:1px solid var(--line);border-radius:18px;background:var(--surface);color:var(--ink);padding:18px;width:min(520px,calc(100vw - 24px));max-height:88vh;overflow:auto;}
   dialog::backdrop{background:rgba(0,0,0,.45);}
+  .steprow{display:flex;gap:10px;align-items:baseline;padding:5px 8px;border-radius:8px;font-size:14px;}
+  .steprow .n{width:26px;flex:none;color:var(--ink-2);font-family:var(--font-mono,monospace);font-size:12px;}
+  .steprow.now{background:var(--calm-bg,#dbeee3);font-weight:700;}
+  .stephead{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-2);margin:10px 0 2px;font-weight:600;}
   dialog h2{font-family:var(--font-display);margin:0 0 10px;font-size:20px;}
   .stack{display:flex;flex-direction:column;gap:12px;}
   .login{max-width:420px;margin:12vh auto 0;display:flex;flex-direction:column;gap:12px;}
@@ -274,7 +278,7 @@
 
   <div id="dayBanner"></div>
 
-  <section class="card where" id="posCard" aria-label="Where you are on the ladder">
+  <section class="card where" id="posCard" aria-label="Where you are on the ladder" data-action="steps" role="button" tabindex="0" style="cursor:pointer">
     <div class="pos-row"><span class="pos-now" id="posNow"></span><span class="pos-step" id="posStep"></span></div>
     <div class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" id="posBar"><div id="posFill"></div></div>
     <div class="pos-next" id="posNext"></div>
@@ -328,11 +332,12 @@
 </main>
 
 <dialog id="daySheet"><div class="stack" id="dayBody"></div></dialog>
+<dialog id="stepsSheet"><div class="stack" id="stepsBody"></div></dialog>
 <dialog id="eodSheet"><div class="stack" id="eodBody"></div></dialog>
 
-<script src="config.js?v=16"></script>
-<script src="supabase.js?v=16"></script>
-<script src="logic.js?v=16"></script>
-<script src="app.js?v=16"></script>
+<script src="config.js?v=17"></script>
+<script src="supabase.js?v=17"></script>
+<script src="logic.js?v=17"></script>
+<script src="app.js?v=17"></script>
 </body>
 </html>
