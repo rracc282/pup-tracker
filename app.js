@@ -1,6 +1,6 @@
 // Churro tracker app. Uses logic.js (pure) and Supabase (sync + push queue).
 'use strict';
-const APP_VERSION = '5';
+const APP_VERSION = '6';
 const CFG = window.PT_CONFIG || {};
 const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -348,7 +348,10 @@ function feedbackHtml(){
   } else {
     h += `<div class="link-row"><button class="link" data-action="fbopen">${hasDetail ? 'Edit details' : 'Add details'}</button></div>`;
   }
-  h += `<div class="hint" id="fbSaved"></div></div>
+  h += `<div class="hint" id="fbSaved"></div>
+      <button class="btn primary" data-action="fbdone">Save and close</button>
+      <div class="link-row"><button class="link" data-action="fbdiscard">Discard note</button></div>
+    </div>
     <div class="link-row"><button class="link undo" data-action="undo">Undo this rep</button></div></div>`;
   return h;
 }
@@ -789,6 +792,12 @@ document.addEventListener('click', ev => {
     case 'walked': if(ui.feedback){ ui.feedback.note = ($('fbNote') && $('fbNote').value) || ui.feedback.note; ui.feedback.walked = !ui.feedback.walked; flushNote(); renderRep(); } break;
     case 'partner': if(ui.feedback){ ui.feedback.note = ($('fbNote') && $('fbNote').value) || ui.feedback.note; ui.feedback.partner = !ui.feedback.partner; flushNote(); renderRep(); } break;
     case 'undo': undoLast(); break;
+    case 'fbdone': flushNote().then(() => { ui.feedback = null; renderRep(); }); break;
+    case 'fbdiscard': {
+      const f = ui.feedback; const e = f && f.id && repMap.get(f.id);
+      if(e){ const c = Object.assign({}, e); c.notes = ''; delete c.pocket; delete c.tags; delete c.walked; delete c.partner; putEntry(c); }
+      ui.feedback = null; renderRep(); break;
+    }
     case 'toggleall': ui.showAll = !ui.showAll; renderLog(); break;
     case 'void': { const e = repMap.get(t.dataset.id); if(e){ putEntry(Object.assign({}, e, { voided: !e.voided })); render({ rep:true }); scheduleReady(); } break; }
     case 'edit': ui.editId = ui.editId === t.dataset.id ? null : t.dataset.id; ui.confirmDel = null; renderLog(); break;
