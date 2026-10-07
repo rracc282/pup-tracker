@@ -1,4 +1,4 @@
-# Churro independence training (PWA)
+# Churro alone-time training (PWA)
 
 Static site on GitHub Pages + Supabase (auth, database, realtime, push queue).
 

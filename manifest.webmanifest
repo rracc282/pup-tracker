@@ -1,6 +1,6 @@
 {
-  "name": "Churro independence training",
-  "short_name": "Independence",
+  "name": "Churro alone-time training",
+  "short_name": "Alone time",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
