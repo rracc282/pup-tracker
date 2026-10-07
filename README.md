@@ -1,4 +1,4 @@
-# Churro alone-time ladder (PWA)
+# Churro's Calm Steps (PWA)
 
 Static site on GitHub Pages + Supabase (auth, database, realtime, push queue).
 

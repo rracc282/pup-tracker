@@ -1,6 +1,6 @@
 {
-  "name": "Churro alone-time ladder",
-  "short_name": "Churro",
+  "name": "Churro's Calm Steps",
+  "short_name": "Calm Steps",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
