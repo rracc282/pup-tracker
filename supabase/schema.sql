@@ -66,3 +66,9 @@ end $$;
 
 alter publication supabase_realtime add table pt_reps;
 alter publication supabase_realtime add table pt_daystate;
+
+-- Permissions (new Supabase projects do not grant these by default)
+grant usage on schema public to authenticated, service_role;
+grant select, insert, update, delete on pt_reps, pt_daystate, pt_settings, pt_push_subs, pt_queue to authenticated;
+grant all on pt_reps, pt_daystate, pt_settings, pt_push_subs, pt_queue, pt_sent to service_role;
+grant usage, select on sequence pt_push_subs_id_seq to authenticated, service_role;
