@@ -253,6 +253,60 @@ function hhmm(ms){ const d = new Date(ms); return String(d.getHours()).padStart(
 const DAY_NAME = { home:'Home day', sitter:'Sitter day', weekend:'Weekend' };
 const OUT_LABEL = { calm:'Calm', mild:'Wobble', escalated:'Upset' };
 
+// ---------- watch-outs, weekly comparison, progress line ----------
+function dateAdd(ds, n){ const d = new Date(ds + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); }
+// "Get help" triggers. They never change the ladder. Medicated, voided and rest reps are ignored.
+function helpAlerts(entries, date, place){
+  const deps = sortedByDate(entries.filter(e => e.kind === 'dep' && isLive(e) && !e.medicated));
+  const out = [];
+  const from7 = dateAdd(date, -6);
+  const ups = deps.filter(e => e.outcome === 'escalated' && e.date >= from7 && e.date <= date).length;
+  if(ups >= 3) out.push(ups + ' upsets in the last 7 days.');
+  const last3 = deps.slice(-3);
+  if(last3.length === 3 && last3.every(e => e.outcome !== 'calm')) out.push('The last 3 reps were all wobbles or upsets.');
+  const from10 = dateAdd(date, -9);
+  const mine = depsFor(entries, place);
+  if(mine.length){
+    const lv = levelsAfter(mine, startFor(entries, place));
+    const inWin = []; let upStep = false;
+    mine.forEach((e, i) => {
+      if(e.date >= from10 && e.date <= date){
+        inWin.push(e.date);
+        const prev = i > 0 ? lv[i - 1] : startFor(entries, place);
+        if(lv[i] > prev) upStep = true;
+      }
+    });
+    const days = new Set(inWin).size;
+    if(days >= 5 && !upStep && lv[lv.length - 1] < TOP) out.push('No step up in 10 days, even with training on ' + days + ' of them.');
+  }
+  return out;
+}
+function windowStats(entries, place, from, to){
+  const deps = sortedByDate(entries.filter(e => e.kind === 'dep' && isLive(e) && e.date >= from && e.date <= to));
+  const calm = deps.filter(e => e.outcome === 'calm').length, mild = deps.filter(e => e.outcome === 'mild').length, esc = deps.filter(e => e.outcome === 'escalated').length;
+  const mine = depsFor(entries, place);
+  const lv = levelsAfter(mine, startFor(entries, place));
+  let start = startFor(entries, place), end = null, high = null;
+  mine.forEach((e, i) => {
+    if(e.date < from) start = lv[i];
+    else if(e.date <= to){ end = lv[i]; high = high == null ? lv[i] : Math.max(high, lv[i]); }
+  });
+  return { reps: deps.length, calm, mild, esc, days: new Set(deps.map(e => e.date)).size, start, end: end == null ? start : end, high: high == null ? start : high, trained: end != null };
+}
+function weekCompare(entries, date, place){
+  return { cur: windowStats(entries, place, dateAdd(date, -6), date), prev: windowStats(entries, place, dateAdd(date, -13), dateAdd(date, -7)) };
+}
+// End-of-day working step per day, only once real departures have started.
+function progressSeries(entries, place){
+  if(!entries.some(e => e.kind === 'dep' && isLive(e) && e.step >= FIRST_OUT)) return null;
+  const mine = depsFor(entries, place);
+  if(!mine.length) return null;
+  const lv = levelsAfter(mine, startFor(entries, place));
+  const byDay = new Map();
+  mine.forEach((e, i) => byDay.set(e.date, lv[i]));
+  return Array.from(byDay, ([date, level]) => ({ date, level }));
+}
+
 function buildSummary(entries, days, date, place){
   const live = entries.filter(isLive);
   const dayDeps = sortedByDate(live.filter(e => e.kind === 'dep' && e.date === date));
@@ -269,7 +323,7 @@ function buildSummary(entries, days, date, place){
   L.push('');
   L.push('Date: ' + fmtDay(date) + ' · Day type: ' + (DAY_NAME[ds.day_type] || 'not set') + ' · Medicated today: ' + (ds.medicated ? 'YES (reps do not count)' : 'no') + ' · Place: ' + place);
   L.push('Working step now: ' + stepLabel(st.level) + ' (step ' + (st.level + 1) + ' of ' + (TOP + 1) + '), ' + st.run + ' of ' + st.need + ' calm in a row.');
-  L.push('Today: ' + dayDeps.length + ' reps (' + c + ' calm, ' + w + ' wobble, ' + u + ' upset), ' + rests.length + ' rest blocks' + (rests.length ? ' (' + rests.map(r => (r.minutes != null ? r.minutes : '?') + ' min ' + (OUT_LABEL[r.outcome] || '')).join(', ') + ')' : '') + ', alone time: ' + (alone.length ? alone.map(a => a.minutes + ' min ' + (OUT_LABEL[a.outcome] || '')).join(', ') : 'none') + '.');
+  L.push('Today: ' + dayDeps.length + ' reps (' + c + ' calm, ' + w + ' wobble, ' + u + ' upset), ' + rests.length + ' rest blocks' + (rests.length ? ' (' + rests.map(r => (r.minutes != null ? r.minutes : '?') + ' min ' + (OUT_LABEL[r.outcome] || '')).join(', ') + ')' : '') + ', alone time: ' + (alone.length ? alone.map(a => a.minutes + ' min ' + (OUT_LABEL[a.outcome] || '') + (a.trazodone ? ' (trazodone given)' : '')).join(', ') : 'none') + '.');
   L.push('');
   L.push('Reps:');
   dayDeps.forEach((e, i) => {
@@ -279,12 +333,17 @@ function buildSummary(entries, days, date, place){
     L.push((i + 1) + '. ' + hhmm(e.createdAt) + ' · ' + stepLabel(e.step) + dur + ' [' + kind + '] · ' + (OUT_LABEL[e.outcome] || '?') + (extra ? ' · ' + extra : '') + (e.notes ? ' · "' + e.notes + '"' : ''));
   });
   rests.forEach(r => L.push('Rest block ' + hhmm(r.createdAt) + ' · ' + (r.minutes != null ? r.minutes + ' min' : '') + ' · ' + (OUT_LABEL[r.outcome] || '') + (r.notes ? ' · "' + r.notes + '"' : '')));
-  alone.forEach(a => L.push('Alone time ' + hhmm(a.createdAt) + ' · ' + a.minutes + ' min · ' + (OUT_LABEL[a.outcome] || '') + (a.notes ? ' · "' + a.notes + '"' : '')));
+  alone.forEach(a => L.push('Alone time ' + hhmm(a.createdAt) + ' · ' + a.minutes + ' min · ' + (OUT_LABEL[a.outcome] || '') + (a.trazodone ? ' · trazodone given' : '') + (a.notes ? ' · "' + a.notes + '"' : '')));
   const moves = [];
   let prev = null;
   dayDeps.forEach(e => { const l = levelAfterId[e.id]; if(l != null && prev != null && l !== prev) moves.push(stepLabel(prev) + ' → ' + stepLabel(l)); if(l != null) prev = l; });
   L.push('');
   L.push('Step changes today: ' + (moves.length ? moves.join('; ') : 'none') + '.');
+  const tagCount = {}; dayDeps.forEach(e => (e.tags || []).forEach(t => { tagCount[t] = (tagCount[t] || 0) + 1; }));
+  const tagList = Object.keys(tagCount).map(t => t + (tagCount[t] > 1 ? ' x' + tagCount[t] : ''));
+  if(tagList.length) L.push('Tags seen today: ' + tagList.join(', ') + '.');
+  const alerts = helpAlerts(live, date, place);
+  if(alerts.length) L.push('Watch-outs: ' + alerts.join(' ') + ' Worth discussing with a behaviourist or vet.');
   // Last 7 days
   const dates = Array.from(new Set(live.filter(e => e.kind === 'dep').map(e => e.date))).sort().slice(-7);
   if(dates.length){
@@ -301,4 +360,4 @@ function buildSummary(entries, days, date, place){
   return L.join('\n');
 }
 
-if(typeof module !== 'undefined') module.exports = { DUR, TOP, FIRST_OUT, LAST_CUE, QUICK_CEILING, isQuick, STEP_NAMES, CUE_IDS, idOf, indexOfId, stepLabel, stepTag, stepEst, gapSec, fits, need, capFor, sortedByDate, computeState, depsFor, stateFrom, baselineFor, startFor, skippedRanges, barInfo, levelsAfter, rand01, pickNext, ceilingFor, cooldownMs, waitUntil, coachMsg, normalizeEntry, buildSummary, fmtSec, SESSION_MIN, SESSION_MAX, sessionSizeFor, breakMinFor };
+if(typeof module !== 'undefined') module.exports = { DUR, TOP, FIRST_OUT, LAST_CUE, QUICK_CEILING, isQuick, STEP_NAMES, CUE_IDS, idOf, indexOfId, stepLabel, stepTag, stepEst, gapSec, fits, need, capFor, sortedByDate, computeState, depsFor, stateFrom, baselineFor, startFor, skippedRanges, barInfo, levelsAfter, rand01, pickNext, ceilingFor, cooldownMs, waitUntil, coachMsg, normalizeEntry, buildSummary, fmtSec, SESSION_MIN, SESSION_MAX, sessionSizeFor, breakMinFor, dateAdd, helpAlerts, windowStats, weekCompare, progressSeries };

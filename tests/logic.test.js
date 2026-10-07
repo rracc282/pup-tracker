@@ -89,3 +89,26 @@ assert.strictEqual(L.stateFrom([jump].concat(wob),'home').level,8); // two wobbl
   const fi=L.barInfo(base.concat([fwd]),'home'); assert.deepStrictEqual(fi.skipped,[{from:3,to:6}]); assert.deepStrictEqual(fi.regressed,[]);
 }
 console.log('logic tests ok');
+// ---- watch-outs, weekly comparison, progress line ----
+{
+  const D=(d,o,extra)=>Object.assign(mk({id:'h'+(id++),step:0,outcome:o,date:d,createdAt:Date.parse(d+'T10:00:00Z')+(id*1000)}),extra||{});
+  assert.strictEqual(L.dateAdd('2026-10-01',-6),'2026-09-25');
+  const ups=[D('2026-10-05','escalated'),D('2026-10-06','escalated'),D('2026-10-07','escalated')];
+  assert(L.helpAlerts(ups,'2026-10-07','home').some(x=>/3 upsets/.test(x)));
+  assert(L.helpAlerts(ups.map(e=>Object.assign({},e,{medicated:true})),'2026-10-07','home').length===0);
+  const streak=[D('2026-10-05','calm'),D('2026-10-06','mild'),D('2026-10-06','mild'),D('2026-10-07','mild')];
+  assert(L.helpAlerts(streak,'2026-10-07','home').some(x=>/last 3/.test(x)));
+  const calmOnly=[D('2026-10-06','calm'),D('2026-10-07','calm')];
+  assert.strictEqual(L.helpAlerts(calmOnly,'2026-10-07','home').length,0);
+  // stall: 5 training days in 10 with only wobble-repeats at step 0 (no step up)
+  const stall=['03','04','05','06','07'].map(d=>D('2026-10-'+d,'calm')).map((e,i)=>i%2?e:Object.assign(e,{outcome:'mild'}));
+  assert(L.helpAlerts(stall,'2026-10-07','home').some(x=>/No step up/.test(x)), 'stall');
+  const wc=L.weekCompare(stall.concat([D('2026-09-28','calm')]),'2026-10-07','home');
+  assert.strictEqual(wc.cur.days,5); assert.strictEqual(wc.prev.reps,1);
+  assert.strictEqual(L.progressSeries(stall,'home'),null);
+  const far=stall.concat([D('2026-10-07','calm',{step:13})]);
+  assert(Array.isArray(L.progressSeries(far,'home')));
+  const sm=L.buildSummary(ups.map(e=>Object.assign({},e,{tags:['Panting']})),{},'2026-10-07','home');
+  assert(/Tags seen today: Panting\./.test(sm)); assert(/Watch-outs/.test(sm));
+}
+console.log('logic tests (new) ok');

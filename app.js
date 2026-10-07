@@ -1,6 +1,6 @@
 // Churro tracker app. Uses logic.js (pure) and Supabase (sync + push queue).
 'use strict';
-const APP_VERSION = '18';
+const APP_VERSION = '19';
 const CFG = window.PT_CONFIG || {};
 const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -28,7 +28,18 @@ const PLACES = [['home','Home'],['zurich','Zurich'],['other','Elsewhere']];
 const PLACE_NAME = { home:'Home', zurich:'Zurich', other:'Elsewhere' };
 const OUT_NAME = { calm:'Calm', mild:'Wobble', escalated:'Upset' };
 const POCKET_TAGS = ['Coffee','Shower','Bins','Cooking','Call','Evening','Other'];
-const REACTION_TAGS = ['Asleep before','Awake before','Head up','Stood up','Followed me','Went to the door','Vocalised','Settled under 10 s','Settled under 1 min','Took over 1 min','Outside noise'];
+const TAG_GROUPS = [
+  ['Before I left', ['Asleep before','Awake before','@walked','Chew given']],
+  ['Her first reaction', ['Head up','Stood up','Followed me','Went to the door']],
+  ['How quickly she settled', ['Settled under 10 s','Settled under 1 min','Took over 1 min','Never settled']],
+  ['Body signs', ['Panting','Pacing','Trembling','Lip licking','Yawning']],
+  ['Sounds', ['Whined','Barked','Howled','Quiet']],
+  ['While I was out', ['Stayed at the door','In her bed','Destructive','Toilet accident']],
+  ['When I came back', ['Calm greeting','Excited','Clingy','Ignored me']],
+  ['Context', ['Outside noise','Visitor']]
+];
+const TAG_LABEL = { 'Asleep before':'Asleep', 'Awake before':'Awake', 'Settled under 10 s':'Under 10 s', 'Settled under 1 min':'Under 1 min', 'Took over 1 min':'Over 1 min', '@walked':'Walked first' };
+const REACTION_TAGS_OLD = ['Asleep before','Awake before','Head up','Stood up','Followed me','Went to the door','Vocalised','Settled under 10 s','Settled under 1 min','Took over 1 min','Outside noise'];
 const SPOTS = ['Sofa','Bed','Crate','Floor'];
 const DAY_TYPES = [['home','Home','Most of the day at home. Room for up to 10 longer reps.'],['sitter','Sitter','Sitter has her. Up to 5 longer reps, plenty of quick ones.'],['weekend','Weekend','We may be out a lot. Up to 8 longer reps. Gentle.']];
 
@@ -180,6 +191,11 @@ const READY_MSGS = [
   ['Ears up, rest over 🐾', 'Next rep is waiting. You two are doing great.'],
   ['Treat o\'clock? 🦴', 'Break finished. Come back for the next rep.'],
   ['Back to the ladder 🪜', 'One more step up. Ready when you are.']
+];
+const FORGOT_MSGS = [
+  ['Rep still open? ⏱️', 'Tap to log how she did.'],
+  ['Did she make it? 🐾', 'That rep is still waiting for a result.'],
+  ['Quick check-in ✅', 'Log the last rep so the next one can be planned.']
 ];
 const TIMEUP_MSGS = [
   ['Time is up! ⏰', 'Come back in calmly, no big hello.'],
@@ -412,12 +428,16 @@ function feedbackHtml(){
   if(f.open){
     h += `<div class="chips" role="group" aria-label="What were you doing">
         ${POCKET_TAGS.map(t => `<button class="chip" data-tag="${t}" aria-pressed="${f.pocket.includes(t)}">${t}</button>`).join('')}
-        <button class="chip" data-action="walked" aria-pressed="${!!f.walked}">Walked first</button>
         <button class="chip" data-action="partner" aria-pressed="${!!f.partner}">Both of us</button>
       </div>
-      <div class="chips" role="group" aria-label="What she did. Pick all that apply">
-        ${REACTION_TAGS.map(t => `<button class="chip" data-rtag="${t}" aria-pressed="${f.tags.includes(t)}">${t}</button>`).join('')}
-      </div>`;
+      <div class="tgroups">${TAG_GROUPS.map(([g, list]) => {
+        const on = list.filter(t => t === '@walked' ? !!f.walked : f.tags.includes(t)).length;
+        const op = ui.tgOpen && ui.tgOpen[g];
+        return `<div class="tgroup"><button class="tg-head" data-tgroup="${esc(g)}" aria-expanded="${!!op}"><span>${esc(g)}</span><span class="cnt">${on ? on : ''}</span></button>` +
+          (op ? `<div class="chips">${list.map(t => t === '@walked'
+            ? `<button class="chip" data-action="walked" aria-pressed="${!!f.walked}">Walked first</button>`
+            : `<button class="chip" data-rtag="${t}" aria-pressed="${f.tags.includes(t)}">${esc(TAG_LABEL[t] || t)}</button>`).join('')}</div>` : '') + `</div>`;
+      }).join('')}</div>`;
   } else {
     h += `<div class="link-row"><button class="link" data-action="fbopen">${hasDetail ? 'Edit details' : 'Add details'}</button></div>`;
   }
@@ -431,6 +451,10 @@ function feedbackHtml(){
 
 function bannersHtml(step){
   let h = '';
+  if(lsGet('pt-help-dismiss') !== todayStr()){
+    const al = helpAlerts(liveEntries(), todayStr(), place);
+    if(al.length) h += `<div class="banner upset"><b>Worth getting advice.</b> ${al.map(esc).join(' ')} Talk to your behaviourist or vet, and share today's summary. This does not change the ladder. <button class="inl" data-action="helpdismiss">Dismiss for today</button></div>`;
+  }
   const todays = todayDeps();
   const last = todays.length ? todays[todays.length - 1] : null;
   if(last && last.outcome === 'escalated'){
@@ -546,7 +570,7 @@ function describeEntry(e){
     return 'Step ' + (e.step+1) + ' · ' + stepLabel(e.step) + (e.step >= FIRST_OUT && e.actualSec != null ? ' (' + fmtSec(e.actualSec) + ')' : '') + ' · ' + OUT_NAME[e.outcome] + (e.medicated ? ' · medicated' : '');
   }
   if(e.kind === 'rest') return 'Rest block · ' + (e.minutes != null ? e.minutes + ' min' : '') + ' · ' + OUT_NAME[e.outcome];
-  if(e.kind === 'alone') return 'Alone time · ' + (e.minutes != null ? e.minutes + ' min' : '') + ' · ' + (OUT_NAME[e.outcome] || '');
+  if(e.kind === 'alone') return 'Alone time · ' + (e.minutes != null ? e.minutes + ' min' : '') + ' · ' + (OUT_NAME[e.outcome] || '') + (e.trazodone ? ' · trazodone' : '');
   if(e.kind === 'baseline') return 'Step set by hand · ' + stepLabel(e.level);
   if(e.kind === 'legacy') return 'Earlier version' + (e.oldStep != null ? ' · old step ' + (e.oldStep + 1) : '') + ' · ' + (OUT_NAME[e.outcome] || 'Neutral day');
   return 'Old method · ' + (e.phase ? 'Phase ' + e.phase : '') + (e.subVal ? ' · ' + e.subVal + ' min' : '') + ' · ' + (OUT_NAME[e.outcome] || 'Neutral day');
@@ -580,6 +604,35 @@ function renderLog(){
   $('logList').innerHTML = h;
 }
 
+function weekHtml(){
+  const w = weekCompare(liveEntries(), todayStr(), place);
+  if(!w.cur.reps && !w.prev.reps) return '';
+  const pct = s => s.reps ? Math.round(s.calm / s.reps * 100) + '%' : '-';
+  const diff = s => (s.end - s.start === 0 ? 'no change' : (s.end > s.start ? '+' : '') + (s.end - s.start) + ' step' + (Math.abs(s.end - s.start) === 1 ? '' : 's'));
+  const row = (l, c, p) => `<tr><td>${l}</td><td>${c}</td><td>${p}</td></tr>`;
+  return `<div class="stack"><b>This week vs last week</b>
+    <table class="wk"><tr><th></th><th>Last 7 days</th><th>Before that</th></tr>
+      ${row('Training days', w.cur.days, w.prev.days)}
+      ${row('Reps', w.cur.reps, w.prev.reps)}
+      ${row('Calm', pct(w.cur), pct(w.prev))}
+      ${row('Wobbles', w.cur.mild, w.prev.mild)}
+      ${row('Upsets', w.cur.esc, w.prev.esc)}
+      ${row('Step change', diff(w.cur), diff(w.prev))}
+      ${row('Highest step', w.cur.trained ? w.cur.high + 1 : '-', w.prev.trained ? w.prev.high + 1 : '-')}
+    </table><div class="hint">Medicated and voided reps do not count toward the ladder, but are included in the rep counts.</div></div>`;
+}
+function progressHtml(){
+  const s = progressSeries(liveEntries(), place);
+  if(!s || s.length < 2) return s ? '<div class="stack"><b>Progress</b><div class="hint">The line appears after a second day of training.</div></div>' : '';
+  const W = 300, H = 90, P = 6;
+  const x = i => P + (W - 2 * P) * (s.length === 1 ? 0 : i / (s.length - 1));
+  const y = v => H - P - (H - 2 * P) * (v / TOP);
+  const pts = s.map((p, i) => x(i).toFixed(1) + ',' + y(p.level).toFixed(1)).join(' ');
+  const last = s[s.length - 1];
+  return `<div class="stack"><b>Progress</b>
+    <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Working step over time" style="width:100%;height:auto"><polyline points="${pts}" fill="none" stroke="var(--calm)" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/><circle cx="${x(s.length - 1).toFixed(1)}" cy="${y(last.level).toFixed(1)}" r="4.5" fill="var(--calm)"/></svg>
+    <div class="hint">${esc(fmtDay(s[0].date))} to ${esc(fmtDay(last.date))}. Now: ${esc(stepLabel(last.level))}.</div></div>`;
+}
 function renderMore(){
   const a = ui.alone;
   const perm = ('Notification' in window) ? Notification.permission : 'unsupported';
@@ -587,10 +640,12 @@ function renderMore(){
   if(!a) alone = `<button class="btn sm" data-action="aloneopen">Log time she was really alone</button>`;
   else alone = `<div class="stack"><b>Real alone time</b><div class="hint">For absences outside training (a sitter cancelled, an errand). It never changes your step.</div>
       <input class="txt" id="aloneMin" type="number" inputmode="numeric" min="1" placeholder="Minutes" value="${esc(a.minutes || '')}">
-      <div class="chips">${['calm','mild','escalated'].map(o => `<button class="chip" data-aout="${o}" aria-pressed="${a.outcome===o}">${OUT_NAME[o]}</button>`).join('')}</div>
+      <div class="chips">${['calm','mild','escalated'].map(o => `<button class="chip" data-aout="${o}" aria-pressed="${a.outcome===o}">${OUT_NAME[o]}</button>`).join('')}<button class="chip" data-action="alonetraz" aria-pressed="${!!a.trazodone}">Trazodone given</button></div>
       <textarea class="note" id="aloneNote" placeholder="What happened? Dictate if you like.">${esc(a.notes || '')}</textarea>
       <button class="btn sm primary" data-action="alonesave">Save</button><button class="link" data-action="aloneclose">Cancel</button></div>`;
   $('moreList').innerHTML = `
+    ${weekHtml()}
+    ${progressHtml()}
     ${alone}
     <div class="stack"><b>Set my step</b>
       <div class="hint">Use this once to start where she really is, or to move by hand. Earlier reps stop counting toward the ladder.</div>
@@ -720,21 +775,25 @@ async function saveRep(outcome){
     }
   }
   ui.feedback = { outcome, msg, id:data.id, open:false, note:'', pocket:[], tags:[], walked:false, partner:false };
-  const timeId = r.queueId;
+  const timeId = r.queueId; const forgotId = r.forgotId;
   ui.mode = 'idle'; ui.rep = null; saveActive(); stopTicking();
   putEntry(data);
-  qCancelId(timeId);
+  qCancelId(timeId); qCancelId(forgotId);
   render({ rep:true });
   if(r.kind === 'dep') scheduleReady();
 }
 
+async function scheduleForgot(r, planSec){
+  const id = await qInsert({ fire_at: new Date(r.startedAt + (planSec + 20 * 60) * 1000).toISOString(), kind:'forgot', tag:'forgot', title:rnd(FORGOT_MSGS)[0], body:'', open:'' });
+  if(id && ui.rep && ui.rep === r){ r.forgotId = id; saveActive(); }
+}
 function startRep(step){
   flushNote();
   ui.feedback = null; ui.override = false;
   qCancelKind('ready');
   const rep = { kind:'dep', step, place, startedAt:null, alerted:false };
   if(step >= FIRST_OUT){ ui.mode = 'prep'; ui.rep = rep; }
-  else { rep.startedAt = Date.now(); ui.mode = 'run'; ui.rep = rep; primeAudio(); startTicking(); }
+  else { rep.startedAt = Date.now(); ui.mode = 'run'; ui.rep = rep; primeAudio(); startTicking(); scheduleForgot(rep, 60); }
   saveActive(); render({ rep:true });
 }
 async function goOut(){
@@ -743,6 +802,7 @@ async function goOut(){
   r.startedAt = Date.now(); ui.mode = 'run';
   saveActive(); startTicking(); render({ rep:true });
   const target = DUR[r.step];
+  scheduleForgot(r, target || 60);
   if(target > 300){
     const tm = rnd(TIMEUP_MSGS);
     const id = await qInsert({ fire_at: new Date(r.startedAt + target * 1000).toISOString(), kind:'timeup', tag:'timeup', urgent:true, title:tm[0], body:tm[1] + ' ' + stepLabel(r.step) + ' done.', open:'' });
@@ -763,7 +823,7 @@ function finishRun(early){
   ui.mode = 'outcome'; saveActive(); render({ rep:true });
 }
 function cancelRep(){
-  if(ui.rep) qCancelId(ui.rep.queueId);
+  if(ui.rep){ qCancelId(ui.rep.queueId); qCancelId(ui.rep.forgotId); }
   ui.mode = 'idle'; ui.rep = null; saveActive(); stopTicking(); render({ rep:true });
   scheduleReady();
 }
@@ -853,6 +913,7 @@ document.addEventListener('click', ev => {
   if(t.dataset.spot){ spot = spot === t.dataset.spot ? '' : t.dataset.spot; lsSet('pt-spot', spot); renderPocket(); return; }
   if(t.dataset.out){ saveRep(t.dataset.out); return; }
   if(t.dataset.tag){ if(ui.feedback){ const f = ui.feedback; f.note = ($('fbNote') && $('fbNote').value) || f.note; const k = t.dataset.tag; f.pocket = f.pocket.includes(k) ? f.pocket.filter(x => x !== k) : f.pocket.concat(k); flushNote(); renderRep(); } return; }
+  if(t.dataset.tgroup){ ui.tgOpen = ui.tgOpen || {}; const g = t.dataset.tgroup; ui.tgOpen[g] = !ui.tgOpen[g]; if(ui.feedback){ ui.feedback.note = ($('fbNote') && $('fbNote').value) || ui.feedback.note; } renderRep(); return; }
   if(t.dataset.rtag){ if(ui.feedback){ const f = ui.feedback; f.note = ($('fbNote') && $('fbNote').value) || f.note; const k = t.dataset.rtag; f.tags = f.tags.includes(k) ? f.tags.filter(x => x !== k) : f.tags.concat(k); flushNote(); renderRep(); } return; }
   if(t.dataset.setout){ const e = repMap.get(t.dataset.id); if(e){ putEntry(Object.assign({}, e, { outcome: t.dataset.setout })); render({ rep:true }); } return; }
   if(t.dataset.aout){ ui.alone.outcome = t.dataset.aout; ui.alone.minutes = $('aloneMin').value; ui.alone.notes = $('aloneNote').value; renderMore(); return; }
@@ -881,6 +942,7 @@ document.addEventListener('click', ev => {
     case 'del': { const id = t.dataset.id; if(ui.confirmDel !== id){ ui.confirmDel = id; renderLog(); } else { ui.confirmDel = null; ui.editId = null; removeEntry(id); render({ rep:true }); } break; }
     case 'daysheet': openDaySheet(); break;
     case 'steps': openSteps(); break;
+    case 'helpdismiss': lsSet('pt-help-dismiss', todayStr()); renderRep(); break;
     case 'medtoggle': putDay(todayStr(), { medicated: !isMedicated() });
       // stamp today's existing reps so the ladder ignores (or counts) them consistently
       liveEntries().filter(e => e.kind === 'dep' && e.date === todayStr()).forEach(e => { const m = isMedicated(); if(!!e.medicated !== m) putEntry(Object.assign({}, e, { medicated: m })); });
@@ -889,11 +951,12 @@ document.addEventListener('click', ev => {
     case 'eod': openEod(); break;
     case 'eodcopy': copyEod(); break;
     case 'aloneopen': ui.alone = { minutes:'', outcome:'calm', notes:'' }; renderMore(); break;
+    case 'alonetraz': ui.alone.minutes = $('aloneMin').value; ui.alone.notes = $('aloneNote').value; ui.alone.trazodone = !ui.alone.trazodone; renderMore(); break;
     case 'aloneclose': ui.alone = null; renderMore(); break;
     case 'alonesave': {
       const m = parseInt($('aloneMin').value, 10);
       if(!m){ setStatus('Enter the minutes.'); break; }
-      putEntry({ v:3, id: uuid(), kind:'alone', date: todayStr(), createdAt: Date.now(), minutes: m, outcome: ui.alone.outcome, notes: $('aloneNote').value.trim() });
+      putEntry({ v:3, id: uuid(), kind:'alone', date: todayStr(), createdAt: Date.now(), minutes: m, outcome: ui.alone.outcome, notes: $('aloneNote').value.trim(), trazodone: !!ui.alone.trazodone });
       ui.alone = null; render({ rep:true }); setStatus('Logged.'); break;
     }
     case 'setbase': { const lv = parseInt($('baseSel').value, 10); if(!confirm('Set your step for ' + PLACE_NAME[place] + ' to: ' + stepLabel(lv) + '? Reps before now stop counting toward the ladder.')) break; putEntry({ v:3, id: uuid(), kind:'baseline', place, date: todayStr(), createdAt: Date.now(), level: lv, from: stateFrom(ladderEntries(), place).level, outcome:'baseline', notes:'' }); render({ rep:true }); setStatus('Step set.'); break; }
