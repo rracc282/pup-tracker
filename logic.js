@@ -93,7 +93,10 @@ function baselineFor(list, place){
 // Reps that count toward the ladder: live, a ladder rep, this place, not medicated, after the last baseline.
 function depsFor(list, place){
   const b = baselineFor(list, place);
-  return sortedByDate(list.filter(e => e.kind === 'dep' && isLive(e) && !e.medicated && (e.place || 'home') === place && (!b || e.createdAt > b.createdAt)));
+  const out = sortedByDate(list.filter(e => e.kind === 'dep' && isLive(e) && !e.medicated && (e.place || 'home') === place && (!b || e.createdAt > b.createdAt)));
+  // A new place starts from scratch: ignore the starting step stored on its first rep by the older "three below Home" rule.
+  if(place !== 'home' && !b && out.length && out[0].level != null) out[0] = Object.assign({}, out[0], { level: undefined });
+  return out;
 }
 // Step ranges that were set forward by hand (not earned by reps). Each baseline remembers the step she was on before.
 function skippedRanges(list, place){
@@ -127,8 +130,7 @@ function barInfo(list, place){
 function startFor(list, place){
   const b = baselineFor(list, place);
   if(b) return b.level;
-  if(place === 'home') return 0;
-  return Math.max(0, stateFrom(list, 'home').level - 3);
+  return 0; // every place, including a new one, starts from the first step
 }
 function stateFrom(list, place){
   const own = depsFor(list, place);

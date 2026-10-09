@@ -1,6 +1,6 @@
 // Churro tracker app. Uses logic.js (pure) and Supabase (sync + push queue).
 'use strict';
-const APP_VERSION = '24';
+const APP_VERSION = '25';
 const CFG = window.PT_CONFIG || {};
 const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -367,7 +367,7 @@ function renderPos(){
   if(info.marks.length) legend.push('Red tick: where she needed to drop back. It goes away once she is past it.');
   $('posLegend').innerHTML = legend.map(t => `<div>${esc(t)}</div>`).join('');
   const note = $('posNote');
-  if(st.newPlace){ note.hidden = false; note.textContent = PLACE_NAME[place] + ' is new, so it starts three steps below your Home step. It has its own ladder from here.'; }
+  if(st.newPlace){ note.hidden = false; note.textContent = PLACE_NAME[place] + ' is new, so it has its own ladder and starts from the first step.'; }
   else note.hidden = true;
 }
 

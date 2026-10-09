@@ -57,7 +57,7 @@ const bl={kind:'baseline',id:'bl',place:'home',date:'2026-10-07',createdAt:t+1e6
 const afterBase=rep(9,'calm',{createdAt:t+2e6});
 assert.strictEqual(L.stateFrom([rep(0,'calm'),rep(0,'calm'),bl],'home').level,9);
 assert.strictEqual(L.stateFrom([bl,afterBase],'home').run,1);
-assert.strictEqual(L.stateFrom([rep(0,'calm'),rep(0,'calm'),bl],'zurich').level,6);
+assert.strictEqual(L.stateFrom([rep(0,'calm'),rep(0,'calm'),bl],'zurich').level,0); // new place starts from scratch
 assert.strictEqual(L.stateFrom([bl],'zurich').newPlace,false===false?true:false);
 // manual forward jump: orange range recorded, then the normal rules continue from the new step
 const jump={kind:'baseline',id:'jp',place:'home',date:'2026-10-07',createdAt:t+5e6,level:9,from:6,outcome:'baseline'};
@@ -135,3 +135,13 @@ console.log('logic tests (new) ok');
   for(let k=0;k<300;k++){ assert(L.pickNext(up,270,'u'+k).step<=15); }
 }
 console.log('logic tests (wobble fix) ok');
+
+// new place: from scratch, even for reps logged under the old "three below Home" rule (stored level 6)
+{
+  let i3=0,t3=Date.parse('2026-10-09T09:00:00Z');
+  const Z=(step,outcome,level)=>({id:'z'+(i3++),kind:'dep',place:'zurich',date:'2026-10-09',step,outcome,level,createdAt:(t3+=900000)});
+  const zs=L.stateFrom([Z(6,'mild',6),Z(4,'calm',6),Z(6,'mild',6),Z(4,'mild',6)],'zurich');
+  assert.strictEqual(zs.level,0);
+  assert.strictEqual(L.startFor([],'zurich'),0);
+}
+console.log('logic tests (new place) ok');
