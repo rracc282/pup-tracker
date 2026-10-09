@@ -112,3 +112,26 @@ console.log('logic tests ok');
   assert(/Tags seen today: Panting\./.test(sm)); assert(/Watch-outs/.test(sm));
 }
 console.log('logic tests (new) ok');
+
+// ---- wobble fix: drops go below where she struggled, next rep never harder ----
+{
+  let i2=0,t2=Date.parse('2026-10-09T09:00:00Z');
+  const R=(step,outcome)=>({id:'w'+(i2++),kind:'dep',place:'zurich',date:'2026-10-09',step,outcome,createdAt:(t2+=900000)});
+  // her real Zurich sequence: W at 6, calm at 4, W at 6, W at 4  (start level 6)
+  const seq=[R(6,'mild'),R(4,'calm'),R(6,'mild'),R(4,'mild')];
+  let st=L.computeState(seq,6);
+  assert.strictEqual(st.level,4,'drops to the step she wobbled on, not up to step 5');
+  assert.strictEqual(st.lastEvent,'wobbleDrop');
+  for(let k=0;k<300;k++){ const n=L.pickNext(st,270,'z'+k); assert(n.step<=4,'next rep never harder than where she wobbled: '+n.step); }
+  // wobbles at the working step still drop exactly one
+  assert.strictEqual(L.computeState([R(6,'mild'),R(6,'mild')],6).level,5);
+  // wobbles far below the working step: drop capped at two
+  assert.strictEqual(L.computeState([R(12,'mild'),R(12,'mild')],20).level,18);
+  // after a single wobble, never harder than that step
+  const one=L.computeState([R(19,'mild')],22);
+  for(let k=0;k<300;k++){ assert(L.pickNext(one,270,'q'+k).step<=19); }
+  // upset: next rep never above the step that upset her
+  const up=L.computeState([R(15,'escalated')],22);
+  for(let k=0;k<300;k++){ assert(L.pickNext(up,270,'u'+k).step<=15); }
+}
+console.log('logic tests (wobble fix) ok');

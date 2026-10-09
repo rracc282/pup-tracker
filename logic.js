@@ -51,13 +51,13 @@ function isLive(e){ return !e.voided; }
 // depList: ladder entries for ONE place, already sorted. Pure and replayable from the log.
 function computeState(depList, startLevel){
   let level = depList.length && depList[0].level != null ? depList[0].level : startLevel;
-  let run = 0, wob = 0, nextEasy = false, lastEvent = null;
+  let run = 0, wob = 0, wobMin = null, badStep = null, nextEasy = false, lastEvent = null;
   const adv = {}, drops = [];
   for(const e of depList){
     const hard = e.step >= level;
-    nextEasy = false; lastEvent = null;
+    nextEasy = false; lastEvent = null; badStep = null;
     if(e.outcome === 'calm'){
-      wob = 0;
+      wob = 0; wobMin = null;
       if(hard){
         run++;
         if(run >= need(level)){
@@ -73,14 +73,16 @@ function computeState(depList, startLevel){
         lastEvent = 'easyOk';
       }
     } else if(e.outcome === 'mild'){
-      run = 0; wob++;
-      if(wob >= 2){ const f = level; level = Math.max(0, level - 1); wob = 0; lastEvent = 'wobbleDrop'; if(level < f) drops.push({ from: f, to: level, why: 'wobbles' }); }
+      run = 0; wob++; badStep = e.step; wobMin = wobMin == null ? e.step : Math.min(wobMin, e.step);
+      // Two wobbles in a row: drop one step, or two when the wobbles happened on easier steps than the working one,
+      // so the new working step is never above where she actually struggled.
+      if(wob >= 2){ const f = level; level = Math.max(0, Math.min(level - 1, Math.max(level - 2, wobMin - 1))); wob = 0; wobMin = null; lastEvent = 'wobbleDrop'; if(level < f) drops.push({ from: f, to: level, why: 'wobbles' }); }
       else lastEvent = 'wobble';
     } else if(e.outcome === 'escalated'){
-      { const f = level; level = Math.max(0, level - 2); run = 0; wob = 0; lastEvent = 'upset'; if(level < f) drops.push({ from: f, to: level, why: 'upset' }); }
+      { const f = level; level = Math.max(0, level - 2); run = 0; wob = 0; wobMin = null; badStep = e.step; lastEvent = 'upset'; if(level < f) drops.push({ from: f, to: level, why: 'upset' }); }
     }
   }
-  return { level, run, wob, nextEasy, lastEvent, need: need(level), drops };
+  return { level, run, wob, nextEasy, lastEvent, badStep, need: need(level), drops };
 }
 
 // A "baseline" entry says: my step is N from here on (set by hand). Reps before it no longer count.
@@ -153,7 +155,7 @@ function pickNext(st, minutes, seed){
   let target = st.level, kind = 'hard';
   if(st.level >= FIRST_OUT){
     const r = rand01(seed + '|a');
-    if(st.lastEvent === 'wobble') kind = 'easy';
+    if(st.lastEvent === 'wobble' || st.lastEvent === 'wobbleDrop') kind = 'easy';
     else if(r < 0.60) kind = 'hard';
     else if(r < 0.85) kind = 'easy';
     else kind = 'decoy';
@@ -165,14 +167,16 @@ function pickNext(st, minutes, seed){
   else if(st.level >= 2){
     // Cue stage: 75% working step, 25% one or two rungs easier (never harder). Easier after a wobble.
     const r = rand01(seed + '|a');
-    if(st.lastEvent === 'wobble' || r < 0.25){
+    if(st.lastEvent === 'wobble' || st.lastEvent === 'wobbleDrop' || r < 0.25){
       kind = 'easy';
       target = Math.max(0, st.level - (1 + Math.floor(rand01(seed + '|b') * 2)));
     }
   }
+  // Never harder than the step that just wobbled or upset her.
+  if(st.badStep != null && target > st.badStep){ target = st.badStep; if(kind === 'hard') kind = 'easy'; }
   let s = target;
   while(s > 0 && !fits(s, minutes)) s--;
-  return { step: s, targetStep: target, kind, easy: s < st.level, fitted: s < target, afterWobble: st.lastEvent === 'wobble' };
+  return { step: s, targetStep: target, kind, easy: s < st.level, fitted: s < target, afterWobble: st.lastEvent === 'wobble' || st.lastEvent === 'wobbleDrop' };
 }
 
 // Longer reps per day. dayType: 'home' | 'sitter' | 'weekend' | null (then the weekday decides).
@@ -228,7 +232,7 @@ function coachMsg(ev, st){
     case 'easyOk': return ['Good.', 'Easier reps keep her confident. They do not count toward moving up.'];
     case 'capped': return ['Calm, and you are at today\'s step-up limit.', 'More reps today stay at this step.'];
     case 'wobble': return ['Small wobble.', 'Repeat this step. This is what her edge looks like.'];
-    case 'wobbleDrop': return ['Two wobbles in a row.', 'You drop one step and build back up.'];
+    case 'wobbleDrop': return ['Two wobbles in a row.', 'You drop a step or two, to below where she struggled, and build back up. The next rep is easier.'];
     case 'upset': return ['Rough one.', 'You dropped two steps. Pause for a few hours or until tomorrow.'];
     default: return ['Logged.', ''];
   }
