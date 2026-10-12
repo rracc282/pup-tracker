@@ -1,6 +1,6 @@
 // Churro tracker app. Uses logic.js (pure) and Supabase (sync + push queue).
 'use strict';
-const APP_VERSION = '25';
+const APP_VERSION = '26';
 const CFG = window.PT_CONFIG || {};
 const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -226,7 +226,7 @@ function scheduleReady(){
     const last = live.slice().sort((a,b) => a.createdAt - b.createdAt).pop();
     if(last.outcome === 'escalated') return;
     const st = stateFrom(liveEntries(), place);
-    const nx = pickNext(st, effPocket(st), place + '|' + depsFor(liveEntries(), place).length + '|' + st.level);
+    const nx = pickNext(st, effPocket(st), place + '|' + depsFor(liveEntries(), place).length + '|' + st.level, { sessionStart: isSessionStart(liveEntries(), w.until) });
     if(capReached(nx.step)) return;
     const m = READY_MSGS[Math.floor(Math.random() * READY_MSGS.length)];
     qInsert({ fire_at: new Date(w.until).toISOString(), kind:'ready', tag:'ready', title:m[0], body:m[1], open:'' });
@@ -497,13 +497,14 @@ function renderRep(){
   if(ui.mode === 'idle'){
     const live = ladderEntries();
     const st = stateFrom(live, place);
-    const nx = pickNext(st, effPocket(st), place + '|' + depsFor(live, place).length + '|' + st.level);
+    const nx = pickNext(st, effPocket(st), place + '|' + depsFor(live, place).length + '|' + st.level, { sessionStart: isSessionStart(liveEntries(), Date.now()) });
     let sub;
-    if(nx.fitted) sub = 'A shorter practice rep that fits your time. Your working step is ' + stepLabel(st.level) + '.';
+    if(nx.kind === 'warmup') sub = 'Warm-up: an easier rep to start the session. It does not count toward moving up. Your working step is ' + stepLabel(st.level) + '.';
+    else if(nx.fitted) sub = 'A shorter practice rep that fits your time. Your working step is ' + stepLabel(st.level) + '.';
     else if(nx.kind === 'decoy') sub = 'No leaving this time. These keep the cues from always meaning you are going.';
     else if(nx.afterWobble) sub = 'Easier on purpose after the wobble. Your working step is ' + stepLabel(st.level) + '.';
     else if(nx.easy) sub = 'Shorter or easier on purpose, to keep her confident. Your working step is ' + stepLabel(st.level) + '.';
-    else sub = 'Working step · ' + st.run + ' of ' + st.need + ' calm in a row.';
+    else sub = 'Working step · ' + st.run + ' of ' + st.need + ' calm in a row' + (st.gate ? ', on ' + st.runDays + ' of 2 days needed' : '') + '.';
     const capLeft = Math.max(1, catLimit(nx.step) - catCount(nx.step));
     const fitN = pocketMatters(st) ? Math.min(SESSION_MAX, capLeft, Math.max(1, Math.floor(pocket * 60 / (stepEst(nx.step) + gapSec(nx.step))))) : 1;
     const blocked = (!!waitInfo() || capReached(nx.step)) && !ui.override;

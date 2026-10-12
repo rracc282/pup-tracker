@@ -39,8 +39,12 @@ function stepTag(i){ return i <= 5 ? 'She watches' : i <= 12 ? 'Behind the door'
 function stepEst(i){ return i < FIRST_OUT ? 60 : DUR[i] + 90; }       // seconds one rep takes, including setup
 function gapSec(i){ return i < FIRST_OUT ? 120 : i <= 21 ? 180 : i <= 26 ? 600 : i <= 29 ? 1200 : 1800; } // calm-rep recovery gap
 function fits(i, minutes){ return stepEst(i) <= minutes * 60; }
-function need(level){ return level <= 2 ? 2 : level <= 12 ? 3 : level <= 25 ? 2 : 3; }
-function capFor(level){ return level <= 12 ? 3 : level <= 25 ? 2 : 1; }
+// Calm reps in a row needed to move up from this step, and the most step-ups allowed per day.
+// Slow where it matters most: the front-door step and the first real departures (steps up to 60 s).
+const GATE = 12;      // "Open and close the front door": the last step before real departures
+const GATE_DAYS = 2;  // calm reps there must come from at least this many different days
+function need(level){ return level <= 2 ? 2 : level <= 11 ? 3 : level === GATE ? 4 : level <= 21 ? 3 : level <= 25 ? 2 : 3; }
+function capFor(level){ return level <= 5 ? 3 : level <= 11 ? 2 : level <= 21 ? 1 : level <= 25 ? 2 : 1; }
 
 function sortedByDate(list){
   return list.slice().sort((a,b)=> (a.date < b.date ? -1 : a.date > b.date ? 1 : 0) || ((a.createdAt||0)-(b.createdAt||0)) || (a.id > b.id ? 1 : -1));
@@ -51,7 +55,7 @@ function isLive(e){ return !e.voided; }
 // depList: ladder entries for ONE place, already sorted. Pure and replayable from the log.
 function computeState(depList, startLevel){
   let level = depList.length && depList[0].level != null ? depList[0].level : startLevel;
-  let run = 0, wob = 0, wobMin = null, badStep = null, nextEasy = false, lastEvent = null;
+  let run = 0, runDates = new Set(), wob = 0, wobMin = null, badStep = null, nextEasy = false, lastEvent = null;
   const adv = {}, drops = [];
   for(const e of depList){
     const hard = e.step >= level;
@@ -59,11 +63,12 @@ function computeState(depList, startLevel){
     if(e.outcome === 'calm'){
       wob = 0; wobMin = null;
       if(hard){
-        run++;
+        run++; runDates.add(e.date);
         if(run >= need(level)){
           const used = adv[e.date] || 0;
-          if(level >= TOP){ run = 0; lastEvent = 'top'; }
-          else if(used < capFor(level)){ level++; run = 0; adv[e.date] = used + 1; lastEvent = 'advance'; }
+          if(level >= TOP){ run = 0; runDates = new Set(); lastEvent = 'top'; }
+          else if(level === GATE && runDates.size < GATE_DAYS){ lastEvent = 'gate'; }   // calm enough, but needs a second day
+          else if(used < capFor(level)){ level++; run = 0; runDates = new Set(); adv[e.date] = used + 1; lastEvent = 'advance'; }
           else { run = need(level); lastEvent = 'capped'; }
         } else {
           lastEvent = 'calmProgress';
@@ -73,16 +78,16 @@ function computeState(depList, startLevel){
         lastEvent = 'easyOk';
       }
     } else if(e.outcome === 'mild'){
-      run = 0; wob++; badStep = e.step; wobMin = wobMin == null ? e.step : Math.min(wobMin, e.step);
+      run = 0; runDates = new Set(); wob++; badStep = e.step; wobMin = wobMin == null ? e.step : Math.min(wobMin, e.step);
       // Two wobbles in a row: drop one step, or two when the wobbles happened on easier steps than the working one,
       // so the new working step is never above where she actually struggled.
       if(wob >= 2){ const f = level; level = Math.max(0, Math.min(level - 1, Math.max(level - 2, wobMin - 1))); wob = 0; wobMin = null; lastEvent = 'wobbleDrop'; if(level < f) drops.push({ from: f, to: level, why: 'wobbles' }); }
       else lastEvent = 'wobble';
     } else if(e.outcome === 'escalated'){
-      { const f = level; level = Math.max(0, level - 2); run = 0; wob = 0; wobMin = null; badStep = e.step; lastEvent = 'upset'; if(level < f) drops.push({ from: f, to: level, why: 'upset' }); }
+      { const f = level; level = Math.max(0, level - 2); run = 0; runDates = new Set(); wob = 0; wobMin = null; badStep = e.step; lastEvent = 'upset'; if(level < f) drops.push({ from: f, to: level, why: 'upset' }); }
     }
   }
-  return { level, run, wob, nextEasy, lastEvent, badStep, need: need(level), drops };
+  return { level, run, runDays: runDates.size, gate: level === GATE, wob, nextEasy, lastEvent, badStep, need: need(level), drops };
 }
 
 // A "baseline" entry says: my step is N from here on (set by hand). Reps before it no longer count.
@@ -153,9 +158,15 @@ function rand01(seed){
 }
 // Mix: 60% working step, 25% shorter or easier on purpose, 15% no-leave decoy. After a wobble the next one is always easier.
 // Same log gives the same pick on every device, until the next rep is logged. Never harder than the working step.
-function pickNext(st, minutes, seed){
+function pickNext(st, minutes, seed, opts){
   let target = st.level, kind = 'hard';
-  if(st.level >= FIRST_OUT){
+  const warm = !!(opts && opts.sessionStart) && st.level >= GATE && st.lastEvent !== 'wobble' && st.lastEvent !== 'wobbleDrop';
+  if(warm){
+    // Warm-up: the first rep of a session is one or two steps easier, so she settles in before the real test.
+    kind = 'warmup';
+    target = st.level === GATE ? 10 + Math.floor(rand01(seed + '|w') * 2) : Math.max(LAST_CUE, st.level - (1 + Math.floor(rand01(seed + '|w') * 2)));
+  }
+  else if(st.level >= FIRST_OUT){
     const r = rand01(seed + '|a');
     if(st.lastEvent === 'wobble' || st.lastEvent === 'wobbleDrop') kind = 'easy';
     else if(r < 0.60) kind = 'hard';
@@ -181,6 +192,13 @@ function pickNext(st, minutes, seed){
   return { step: s, targetStep: target, kind, easy: s < st.level, fitted: s < target, afterWobble: st.lastEvent === 'wobble' || st.lastEvent === 'wobbleDrop' };
 }
 
+// True when this would be the first rep of a session: no ladder rep yet, or the last one was 45+ minutes before `at`.
+function isSessionStart(entries, at){
+  const deps = entries.filter(e => e.kind === 'dep' && isLive(e));
+  if(!deps.length) return true;
+  const last = Math.max.apply(null, deps.map(e => e.createdAt || 0));
+  return (at - last) >= SESSION_GAP_MS;
+}
 // Longer reps per day. dayType: 'home' | 'sitter' | 'weekend' | null (then the weekday decides).
 function ceilingFor(dateObj, dayType){
   if(dayType === 'home') return 10;
@@ -233,6 +251,7 @@ function coachMsg(ev, st){
       return ['Calm.', (st.need - st.run) + ' more calm in a row at this step and you move up.' + (st.level >= 2 ? ' Some reps in between are easier on purpose and do not count.' : '')];
     case 'easyOk': return ['Good.', 'Easier reps keep her confident. They do not count toward moving up.'];
     case 'capped': return ['Calm, and you are at today\'s step-up limit.', 'More reps today stay at this step.'];
+    case 'gate': return ['Calm, but not yet.', 'The front door is the last step before real departures. It needs calm reps on two different days, so come back tomorrow.'];
     case 'wobble': return ['Small wobble.', 'Repeat this step. This is what her edge looks like.'];
     case 'wobbleDrop': return ['Two wobbles in a row.', 'You drop a step or two, to below where she struggled, and build back up. The next rep is easier.'];
     case 'upset': return ['Rough one.', 'You dropped two steps. Pause for a few hours or until tomorrow.'];
@@ -256,6 +275,7 @@ function fmtDay(iso){
   return wd + ' ' + String(d).padStart(2,'0') + '/' + String(m).padStart(2,'0') + '/' + y;
 }
 function hhmm(ms){ const d = new Date(ms); return String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0'); }
+const PLACE_LABEL = { home:'Home (Geneva)', zurich:'Zurich', other:'Elsewhere' };
 const DAY_NAME = { home:'Home day', sitter:'Sitter day', weekend:'Weekend' };
 const OUT_LABEL = { calm:'Calm', mild:'Wobble', escalated:'Upset' };
 
@@ -328,7 +348,13 @@ function buildSummary(entries, days, date, place){
   L.push('End-of-day review for my dog. Please review as the CSAT panel: what the data shows, whether to call it a day, what to change for tomorrow, and any signal that she is stalling or regressing.');
   L.push('');
   L.push('Date: ' + fmtDay(date) + ' · Day type: ' + (DAY_NAME[ds.day_type] || 'not set') + ' · Medicated today: ' + (ds.medicated ? 'YES (reps do not count)' : 'no') + ' · Place: ' + place);
-  L.push('Working step now: ' + stepLabel(st.level) + ' (step ' + (st.level + 1) + ' of ' + (TOP + 1) + '), ' + st.run + ' of ' + st.need + ' calm in a row.');
+  L.push('Working step now, by place:');
+  const placesUsed = Array.from(new Set(live.filter(e => (e.kind === 'dep' || e.kind === 'baseline')).map(e => e.place || 'home')));
+  if(placesUsed.indexOf(place) < 0) placesUsed.unshift(place);
+  placesUsed.forEach(p => {
+    const sp = stateFrom(live, p);
+    L.push('- ' + (PLACE_LABEL[p] || p) + (p === place ? ' (today)' : '') + ': ' + stepLabel(sp.level) + ' (step ' + (sp.level + 1) + ' of ' + (TOP + 1) + '), ' + sp.run + ' of ' + sp.need + ' calm in a row' + (sp.level === GATE ? ', on ' + sp.runDays + ' of ' + GATE_DAYS + ' days needed' : '') + '.');
+  });
   L.push('Today: ' + dayDeps.length + ' reps (' + c + ' calm, ' + w + ' wobble, ' + u + ' upset), ' + rests.length + ' rest blocks' + (rests.length ? ' (' + rests.map(r => (r.minutes != null ? r.minutes : '?') + ' min ' + (OUT_LABEL[r.outcome] || '')).join(', ') + ')' : '') + ', alone time: ' + (alone.length ? alone.map(a => a.minutes + ' min ' + (OUT_LABEL[a.outcome] || '') + (a.trazodone ? ' (trazodone given)' : '')).join(', ') : 'none') + '.');
   L.push('');
   L.push('Reps:');
@@ -350,20 +376,53 @@ function buildSummary(entries, days, date, place){
   if(tagList.length) L.push('Tags seen today: ' + tagList.join(', ') + '.');
   const alerts = helpAlerts(live, date, place);
   if(alerts.length) L.push('Watch-outs: ' + alerts.join(' ') + ' Worth discussing with a behaviourist or vet.');
-  // Last 7 days
+  // Last 7 days, with the highest working step reached in each place that day
   const dates = Array.from(new Set(live.filter(e => e.kind === 'dep').map(e => e.date))).sort().slice(-7);
   if(dates.length){
     L.push('');
-    L.push('Last days (date · day type · reps calm/wobble/upset · highest working step at end of day):');
+    L.push('Last days (date · day type · reps calm/wobble/upset · working step at end of day, per place):');
+    const perPlace = {};
+    placesUsed.forEach(p => { const al = depsFor(live, p); perPlace[p] = { all: al, lv: levelsAfter(al, startFor(live, p)) }; });
     dates.forEach(d => {
       const dd = live.filter(e => e.kind === 'dep' && e.date === d);
       const cc = dd.filter(e => e.outcome === 'calm').length, ww = dd.filter(e => e.outcome === 'mild').length, uu = dd.filter(e => e.outcome === 'escalated').length;
-      const lastE = sortedByDate(dd).filter(e => (e.place || 'home') === place && !e.medicated).pop();
-      const lvl = lastE && levelAfterId[lastE.id] != null ? stepLabel(levelAfterId[lastE.id]) : '—';
-      L.push(fmtDay(d) + ' · ' + ((days[d] && DAY_NAME[days[d].day_type]) || 'type not set') + ' · ' + dd.length + ' reps ' + cc + '/' + ww + '/' + uu + ' · ' + lvl);
+      const steps = [];
+      placesUsed.forEach(p => {
+        const { all: al, lv: lvs } = perPlace[p];
+        let idx = -1; al.forEach((e, i) => { if(e.date <= d) idx = i; });
+        if(al.some(e => e.date === d)) steps.push((PLACE_LABEL[p] || p) + ': ' + (idx >= 0 ? stepLabel(lvs[idx]) : '-'));
+      });
+      L.push(fmtDay(d) + ' · ' + ((days[d] && DAY_NAME[days[d].day_type]) || 'type not set') + ' · ' + dd.length + ' reps ' + cc + '/' + ww + '/' + uu + ' · ' + (steps.join('; ') || '-'));
     });
+  }
+  // Step history: every step touched in each place, with the days she did it and when she moved on
+  const hist = [];
+  placesUsed.forEach(p => {
+    const al = depsFor(live, p); if(!al.length) return;
+    const lvs = levelsAfter(al, startFor(live, p));
+    const info = {};
+    al.forEach((e, i) => {
+      const o = info[e.step] || (info[e.step] = { calm: 0, mild: 0, esc: 0, days: {}, cleared: null });
+      if(e.outcome === 'calm') o.calm++; else if(e.outcome === 'mild') o.mild++; else o.esc++;
+      o.days[e.date] = (o.days[e.date] || 0) + 1;
+      const prev = i ? lvs[i - 1] : startFor(live, p);
+      if(lvs[i] > prev && info[prev] === undefined) info[prev] = { calm: 0, mild: 0, esc: 0, days: {}, cleared: null };
+      if(lvs[i] > prev) info[prev].cleared = e.date;
+    });
+    hist.push('- ' + (PLACE_LABEL[p] || p) + ':');
+    Object.keys(info).map(Number).sort((x, y) => x - y).forEach(k => {
+      const o = info[k];
+      if(o.calm + o.mild + o.esc === 0) return;
+      const ds = Object.keys(o.days).sort().map(d => d.slice(8) + '/' + d.slice(5, 7) + (o.days[d] > 1 ? ' x' + o.days[d] : '')).join(', ');
+      hist.push('   ' + stepLabel(k) + ': ' + o.calm + ' calm, ' + o.mild + ' wobble, ' + o.esc + ' upset' + (ds ? ' · days ' + ds : '') + (o.cleared ? ' · moved on ' + o.cleared.slice(8) + '/' + o.cleared.slice(5, 7) : (k === lvs[lvs.length - 1] ? ' · working step now' : '')));
+    });
+  });
+  if(hist.length){
+    L.push('');
+    L.push('Step history (reps per step, the days they happened, and when she moved up; excludes medicated and voided reps):');
+    hist.forEach(h => L.push(h));
   }
   return L.join('\n');
 }
 
-if(typeof module !== 'undefined') module.exports = { DUR, TOP, FIRST_OUT, LAST_CUE, QUICK_CEILING, isQuick, STEP_NAMES, CUE_IDS, idOf, indexOfId, stepLabel, stepTag, stepEst, gapSec, fits, need, capFor, sortedByDate, computeState, depsFor, stateFrom, baselineFor, startFor, skippedRanges, barInfo, levelsAfter, rand01, pickNext, ceilingFor, cooldownMs, waitUntil, coachMsg, normalizeEntry, buildSummary, fmtSec, SESSION_MIN, SESSION_MAX, sessionSizeFor, breakMinFor, dateAdd, helpAlerts, windowStats, weekCompare, progressSeries };
+if(typeof module !== 'undefined') module.exports = { DUR, TOP, FIRST_OUT, LAST_CUE, QUICK_CEILING, isQuick, STEP_NAMES, CUE_IDS, idOf, indexOfId, stepLabel, stepTag, stepEst, gapSec, fits, need, capFor, sortedByDate, computeState, depsFor, stateFrom, baselineFor, startFor, skippedRanges, barInfo, levelsAfter, rand01, pickNext, ceilingFor, cooldownMs, waitUntil, coachMsg, normalizeEntry, buildSummary, fmtSec, SESSION_MIN, SESSION_MAX, sessionSizeFor, breakMinFor, isSessionStart, GATE, GATE_DAYS, dateAdd, helpAlerts, windowStats, weekCompare, progressSeries };
