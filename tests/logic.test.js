@@ -153,6 +153,13 @@ console.log('logic tests (new place) ok');
   assert.strictEqual(L.need(12),4); assert.strictEqual(L.GATE,12);
   assert.strictEqual(L.capFor(3),3); assert.strictEqual(L.capFor(8),2); assert.strictEqual(L.capFor(12),1); assert.strictEqual(L.capFor(21),1); assert.strictEqual(L.capFor(22),2);
   assert.strictEqual(L.need(15),3); assert.strictEqual(L.need(23),2);
+  // asleep reps: from the front door on, at least 2 calm reps must be awake
+  { const A=(step,date,asleep)=>Object.assign(G(step,'calm',date),{tags:asleep?['Asleep before']:[]});
+    let s2=L.computeState([A(12,'2026-11-12',1),A(12,'2026-11-12',1),A(12,'2026-11-12',1),A(12,'2026-11-13',1)],12);
+    assert.strictEqual(s2.level,12); assert.strictEqual(s2.lastEvent,'awake');
+    s2=L.computeState([A(12,'2026-11-12',1),A(12,'2026-11-12',1),A(12,'2026-11-12',0),A(12,'2026-11-13',0)],12); assert.strictEqual(s2.level,13);
+    s2=L.computeState([A(5,'2026-11-12',1),A(5,'2026-11-12',1),A(5,'2026-11-12',1)],5); assert.strictEqual(s2.level,6,'before the front door asleep still counts');
+    s2=L.computeState([A(12,'2026-10-10',1),A(12,'2026-10-10',1),A(12,'2026-10-10',1)],12); assert.strictEqual(s2.level,13,'old reps keep old rules'); }
   // front door: 4 calm on ONE day does not move her up
   const d1=[1,2,3,4,5].map(()=>G(12,'calm','2026-11-12'));
   let s=L.computeState(d1,12); assert.strictEqual(s.level,12); assert.strictEqual(s.lastEvent,'gate'); assert.strictEqual(s.runDays,1);
