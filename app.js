@@ -1,6 +1,6 @@
 // Churro tracker app. Uses logic.js (pure) and Supabase (sync + push queue).
 'use strict';
-const APP_VERSION = '28';
+const APP_VERSION = '29';
 const CFG = window.PT_CONFIG || {};
 const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -29,7 +29,7 @@ const PLACE_NAME = { home:'Home', zurich:'Zurich', other:'Elsewhere' };
 const OUT_NAME = { calm:'Calm', mild:'Wobble', escalated:'Upset' };
 const POCKET_TAGS = ['Coffee','Shower','Bins','Cooking','Call','Evening','Other'];
 const TAG_GROUPS = [
-  ['Before I left', ['Asleep before','Awake before','@walked','Chew given']],
+  ['Before I left', ['Awake before','Dozing before','Asleep before','@walked','Chew given']],
   ['Her first reaction', ['Head up','Stood up','Followed me','Went to the door']],
   ['How quickly she settled', ['Settled under 10 s','Settled under 1 min','Took over 1 min','Never settled']],
   ['Body signs', ['Panting','Pacing','Trembling','Lip licking','Yawning']],
@@ -38,7 +38,8 @@ const TAG_GROUPS = [
   ['When I came back', ['Calm greeting','Excited','Clingy','Ignored me']],
   ['Context', ['Outside noise','Visitor']]
 ];
-const TAG_LABEL = { 'Asleep before':'Asleep', 'Awake before':'Awake', 'Settled under 10 s':'Under 10 s', 'Settled under 1 min':'Under 1 min', 'Took over 1 min':'Over 1 min', '@walked':'Walked first' };
+const PRE_STATES = [['Awake before','Awake'],['Dozing before','Dozing'],['Asleep before','Asleep']];
+const TAG_LABEL = { 'Dozing before':'Dozing', 'Asleep before':'Asleep', 'Awake before':'Awake', 'Settled under 10 s':'Under 10 s', 'Settled under 1 min':'Under 1 min', 'Took over 1 min':'Over 1 min', '@walked':'Walked first' };
 const REACTION_TAGS_OLD = ['Asleep before','Awake before','Head up','Stood up','Followed me','Went to the door','Vocalised','Settled under 10 s','Settled under 1 min','Took over 1 min','Outside noise'];
 const SPOTS = ['Sofa','Bed','Crate','Floor'];
 const DAY_TYPES = [['home','Home','Most of the day at home. Room for up to 10 longer reps.'],['sitter','Sitter','Sitter has her. Up to 5 longer reps, plenty of quick ones.'],['weekend','Weekend','We may be out a lot. Up to 8 longer reps. Gentle.']];
@@ -434,11 +435,22 @@ function instructionsFor(step){
 
 const CUE_NAME = ['Coat','Shoes','Bag','Keys','Bolt','All five cues','Coat','Shoes','Bag','Keys','Bolt','All five cues','Front door'];
 function cueName(i){ return 'cue: ' + CUE_NAME[i]; }
+// Tags, activity and flags of the rep before the one just logged, for the "Same as last rep" shortcut.
+function lastRepDetails(){
+  const f = ui.feedback; if(!f) return null;
+  const prev = liveEntries().filter(e => e.kind === 'dep' && e.id !== f.id && e.place === place).sort((x, y) => (y.createdAt || 0) - (x.createdAt || 0))[0];
+  if(!prev) return null;
+  const tags = (prev.tags || []).filter(t => !(f.pre && PRE_STATES.some(p => p[0] === t)));
+  const pocket = prev.pocket ? String(prev.pocket).split(', ').filter(Boolean) : [];
+  const keepFlags = !!prev.walked || !!prev.partner;
+  if(!tags.length && !pocket.length && !keepFlags) return null;
+  return { tags, pocket, walked: !!prev.walked, partner: !!prev.partner };
+}
 function feedbackHtml(){
   const f = ui.feedback;
   if(!f) return '';
   const [head, tail] = f.msg;
-  const hasDetail = f.pocket.length || f.tags.length || f.walked || f.partner;
+  const hasDetail = f.pocket.length || f.tags.filter(t => !PRE_STATES.some(p => p[0] === t)).length || f.walked || f.partner;
   let h = `<div class="feedback ${f.outcome}" role="status"><b>${esc(head)}</b>${esc(tail)}
     <div class="fb-form">
       <textarea class="note" id="fbNote" placeholder="Note: what did she do? Tap the mic on your keyboard to dictate." maxlength="800">${esc(f.note||'')}</textarea>`;
@@ -456,7 +468,7 @@ function feedbackHtml(){
             : `<button class="chip" data-rtag="${t}" aria-pressed="${f.tags.includes(t)}">${esc(TAG_LABEL[t] || t)}</button>`).join('')}</div>` : '') + `</div>`;
       }).join('')}</div>`;
   } else {
-    h += `<div class="link-row"><button class="link" data-action="fbopen">${hasDetail ? 'Edit details' : 'Add details'}</button></div>`;
+    h += `<div class="link-row">${!hasDetail && lastRepDetails() ? '<button class="link" data-action="fbsame">Same as last rep</button> · ' : ''}<button class="link" data-action="fbopen">${hasDetail ? 'Edit details' : 'Add details'}</button></div>`;
   }
   h += `<div class="hint" id="fbSaved"></div>
       <button class="btn primary" data-action="fbdone">Save and close</button>
@@ -516,6 +528,8 @@ function renderRep(){
        <ul class="steps">${instructionsFor(nx.step).map(t => `<li>${esc(t)}</li>`).join('')}</ul>
        ${helpHtml(nx.step)}
        ${fitN > 1 ? `<div class="hint" style="margin-bottom:12px">Your time fits about ${fitN} of these. The app spaces them for you.</div>` : ''}
+       <div class="hint" style="margin-bottom:6px">How is she right now?</div>
+       <div class="chips" style="margin-bottom:14px" role="group" aria-label="How she is right now">${PRE_STATES.map(([t, l]) => `<button class="chip" data-pre="${t}" aria-pressed="${ui.pre === t}">${l}</button>`).join('')}</div>
        <button class="btn primary" data-action="start" data-step="${nx.step}" ${blocked ? 'disabled' : ''}>Start rep</button>
        ${blocked ? '<div class="link-row"><button class="link" data-action="override">Skip the wait and start now</button></div>' : ''}`;
     return;
@@ -796,7 +810,8 @@ async function saveRep(outcome){
       msg = coachMsg(after.lastEvent, after);
     }
   }
-  ui.feedback = { outcome, msg, id:data.id, open:false, note:'', pocket:[], tags:[], walked:false, partner:false };
+  if(r.kind === 'dep' && r.pre) data.tags = [r.pre];
+  ui.feedback = { outcome, msg, id:data.id, open:false, note:'', pocket:[], tags:(data.tags || []).slice(), walked:false, partner:false, pre:r.pre || null };
   const timeId = r.queueId; const forgotId = r.forgotId;
   ui.mode = 'idle'; ui.rep = null; saveActive(); stopTicking();
   putEntry(data);
@@ -813,7 +828,8 @@ function startRep(step){
   flushNote();
   ui.feedback = null; ui.override = false;
   qCancelKind('ready');
-  const rep = { kind:'dep', step, place, startedAt:null, alerted:false };
+  const rep = { kind:'dep', step, place, startedAt:null, alerted:false, pre: ui.pre || null };
+  ui.pre = null;
   if(step >= FIRST_OUT){ ui.mode = 'prep'; ui.rep = rep; }
   else { rep.startedAt = Date.now(); ui.mode = 'run'; ui.rep = rep; primeAudio(); startTicking(); scheduleForgot(rep, 60); }
   saveActive(); render({ rep:true });
@@ -935,6 +951,7 @@ document.addEventListener('click', ev => {
   if(t.dataset.spot){ spot = spot === t.dataset.spot ? '' : t.dataset.spot; lsSet('pt-spot', spot); renderPocket(); return; }
   if(t.dataset.out){ saveRep(t.dataset.out); return; }
   if(t.dataset.tag){ if(ui.feedback){ const f = ui.feedback; f.note = ($('fbNote') && $('fbNote').value) || f.note; const k = t.dataset.tag; f.pocket = f.pocket.includes(k) ? f.pocket.filter(x => x !== k) : f.pocket.concat(k); flushNote(); renderRep(); } return; }
+  if(t.dataset.pre){ ui.pre = ui.pre === t.dataset.pre ? null : t.dataset.pre; renderRep(); return; }
   if(t.dataset.tgroup){ ui.tgOpen = ui.tgOpen || {}; const g = t.dataset.tgroup; ui.tgOpen[g] = !ui.tgOpen[g]; if(ui.feedback){ ui.feedback.note = ($('fbNote') && $('fbNote').value) || ui.feedback.note; } renderRep(); return; }
   if(t.dataset.rtag){ if(ui.feedback){ const f = ui.feedback; f.note = ($('fbNote') && $('fbNote').value) || f.note; const k = t.dataset.rtag; f.tags = f.tags.includes(k) ? f.tags.filter(x => x !== k) : f.tags.concat(k); flushNote(); renderRep(); } return; }
   if(t.dataset.setout){ const e = repMap.get(t.dataset.id); if(e){ putEntry(Object.assign({}, e, { outcome: t.dataset.setout })); render({ rep:true }); } return; }
@@ -947,6 +964,7 @@ document.addEventListener('click', ev => {
     case 'cancel': case 'discard': cancelRep(); break;
     case 'startrest': startRest(); break;
     case 'override': ui.override = true; renderRep(); break;
+    case 'fbsame': if(ui.feedback){ const d = lastRepDetails(); if(d){ const f = ui.feedback; f.note = ($('fbNote') && $('fbNote').value) || f.note; f.tags = Array.from(new Set(f.tags.concat(d.tags))); f.pocket = d.pocket.slice(); f.walked = d.walked; f.partner = d.partner; flushNote(); renderRep(); } } break;
     case 'fbopen': if(ui.feedback){ ui.feedback.note = ($('fbNote') && $('fbNote').value) || ui.feedback.note; ui.feedback.open = true; renderRep(); } break;
     case 'walked': if(ui.feedback){ ui.feedback.note = ($('fbNote') && $('fbNote').value) || ui.feedback.note; ui.feedback.walked = !ui.feedback.walked; flushNote(); renderRep(); } break;
     case 'partner': if(ui.feedback){ ui.feedback.note = ($('fbNote') && $('fbNote').value) || ui.feedback.note; ui.feedback.partner = !ui.feedback.partner; flushNote(); renderRep(); } break;
