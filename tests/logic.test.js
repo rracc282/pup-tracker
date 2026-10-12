@@ -148,23 +148,23 @@ console.log('logic tests (new place) ok');
 
 // ---- slower gate, caps, warm-up ----
 {
-  let i4=0,t4=Date.parse('2026-10-12T09:00:00Z');
+  let i4=0,t4=Date.parse('2026-11-12T09:00:00Z');
   const G=(step,outcome,date)=>({id:'g'+(i4++),kind:'dep',place:'home',date,step,outcome,createdAt:(t4+=60000)});
   assert.strictEqual(L.need(12),4); assert.strictEqual(L.GATE,12);
   assert.strictEqual(L.capFor(3),3); assert.strictEqual(L.capFor(8),2); assert.strictEqual(L.capFor(12),1); assert.strictEqual(L.capFor(21),1); assert.strictEqual(L.capFor(22),2);
   assert.strictEqual(L.need(15),3); assert.strictEqual(L.need(23),2);
   // front door: 4 calm on ONE day does not move her up
-  const d1=[1,2,3,4,5].map(()=>G(12,'calm','2026-10-12'));
+  const d1=[1,2,3,4,5].map(()=>G(12,'calm','2026-11-12'));
   let s=L.computeState(d1,12); assert.strictEqual(s.level,12); assert.strictEqual(s.lastEvent,'gate'); assert.strictEqual(s.runDays,1);
   // ...a calm rep on a second day does
-  s=L.computeState(d1.concat([G(12,'calm','2026-10-13')]),12); assert.strictEqual(s.level,13);
+  s=L.computeState(d1.concat([G(12,'calm','2026-11-13')]),12); assert.strictEqual(s.level,13);
   // a wobble in between resets the count and the day tally
-  s=L.computeState([G(12,'calm','2026-10-12'),G(12,'calm','2026-10-12'),G(12,'mild','2026-10-12'),G(12,'calm','2026-10-13'),G(12,'calm','2026-10-13'),G(12,'calm','2026-10-13'),G(12,'calm','2026-10-13')],12);
+  s=L.computeState([G(12,'calm','2026-11-12'),G(12,'calm','2026-11-12'),G(12,'mild','2026-11-12'),G(12,'calm','2026-11-13'),G(12,'calm','2026-11-13'),G(12,'calm','2026-11-13'),G(12,'calm','2026-11-13')],12);
   assert.strictEqual(s.level,12,'a single day after a reset is still not enough');
   // one step-up per day on the first departures
-  const dep=[1,2,3,4,5,6,7,8].map(()=>G(13,'calm','2026-10-14')); s=L.computeState(dep,13); assert.strictEqual(s.level,14,'one step-up a day on the first departures');
+  const dep=[1,2,3,4,5,6,7,8].map(()=>G(13,'calm','2026-11-14')); s=L.computeState(dep,13); assert.strictEqual(s.level,14,'one step-up a day on the first departures');
   // behind the door: two step-ups a day, not three
-  const bd=[0,1,2,3,4,5,6,7,8,9].map((k)=>G(k<3?7:k<6?8:9,'calm','2026-10-12')); s=L.computeState(bd,7); assert(s.level<=9,'cap of 2 behind the door: '+s.level);
+  const bd=[0,1,2,3,4,5,6,7,8,9].map((k)=>G(k<3?7:k<6?8:9,'calm','2026-11-12')); s=L.computeState(bd,7); assert(s.level<=9,'cap of 2 behind the door: '+s.level);
   // warm-up: first rep of a session at/after the front door step is easier; below it nothing changes
   const st12=L.computeState([],12); const seen=new Set();
   for(let k=0;k<200;k++){ const n=L.pickNext(st12,270,'w'+k,{sessionStart:true}); assert.strictEqual(n.kind,'warmup'); assert(n.step===10||n.step===11); seen.add(n.step); }
@@ -175,8 +175,31 @@ console.log('logic tests (new place) ok');
   for(let k=0;k<100;k++){ assert.notStrictEqual(L.pickNext(st12,270,'x'+k,{sessionStart:false}).kind,'warmup'); }
   // session start detection
   assert.strictEqual(L.isSessionStart([],Date.now()),true);
-  const lastRep=G(5,'calm','2026-10-12'); assert.strictEqual(L.isSessionStart([lastRep],lastRep.createdAt+10*60000),false); assert.strictEqual(L.isSessionStart([lastRep],lastRep.createdAt+50*60000),true);
+  const lastRep=G(5,'calm','2026-11-12'); assert.strictEqual(L.isSessionStart([lastRep],lastRep.createdAt+10*60000),false); assert.strictEqual(L.isSessionStart([lastRep],lastRep.createdAt+50*60000),true);
   // a warm-up (easier) rep never counts toward moving up
-  const w1=L.computeState([G(12,'calm','2026-10-12'),G(11,'calm','2026-10-12')],12); assert.strictEqual(w1.run,1);
+  const w1=L.computeState([G(12,'calm','2026-11-12'),G(11,'calm','2026-11-12')],12); assert.strictEqual(w1.run,1);
 }
 console.log('logic tests (gate, caps, warm-up) ok');
+
+// ---- grandfathering: history before the cutover keeps the rules she trained under ----
+{
+  let i5=0,t5=Date.parse('2026-10-07T09:00:00Z');
+  const H=(step,outcome,date)=>({id:'h'+(i5++),kind:'dep',place:'home',date,step,outcome,createdAt:(t5+=60000)});
+  // Wed: three step-ups behind the door (allowed then); Mon: Keys -> Bolt -> all five -> open/close
+  const hist=[];
+  [6,6,6].forEach(s=>hist.push(H(s,'calm','2026-10-07')));   // Coat bd -> Shoes bd
+  [7,7,7].forEach(s=>hist.push(H(s,'calm','2026-10-07')));   // Shoes -> Bag
+  [8,8,8].forEach(s=>hist.push(H(s,'calm','2026-10-07')));   // Bag -> Keys
+  hist.push(H(9,'calm','2026-10-07'));
+  [9,9].forEach(s=>hist.push(H(s,'calm','2026-10-12')));     // Keys -> Bolt
+  [10,10,10].forEach(s=>hist.push(H(s,'calm','2026-10-12'))); // Bolt -> all five
+  [11,11].forEach(s=>hist.push(H(s,'calm','2026-10-12'))); hist.push(H(9,'calm','2026-10-12')); hist.push(H(11,'calm','2026-10-12')); // all five -> open/close
+  hist.push(H(12,'calm','2026-10-12'));
+  const gs=L.computeState(hist,6);
+  assert.strictEqual(gs.level,12,'history is replayed under the old rules'); assert.strictEqual(gs.run,1);
+  // new rules from the cutover day: the front door now needs 4 calm on 2 days (today counts as day 1)
+  const tomorrow=['2026-10-13','2026-10-13','2026-10-13'].map(d=>H(12,'calm',d));
+  const g2=L.computeState(hist.concat(tomorrow),6); assert.strictEqual(g2.level,13);
+  const g3=L.computeState(hist.concat(tomorrow.slice(0,2)),6); assert.strictEqual(g3.level,12);
+}
+console.log('logic tests (grandfathering) ok');

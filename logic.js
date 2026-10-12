@@ -45,6 +45,11 @@ const GATE = 12;      // "Open and close the front door": the last step before r
 const GATE_DAYS = 2;  // calm reps there must come from at least this many different days
 function need(level){ return level <= 2 ? 2 : level <= 11 ? 3 : level === GATE ? 4 : level <= 21 ? 3 : level <= 25 ? 2 : 3; }
 function capFor(level){ return level <= 5 ? 3 : level <= 11 ? 2 : level <= 21 ? 1 : level <= 25 ? 2 : 1; }
+// The stricter rules above apply from this day on. Reps logged before it are replayed under the rules she trained with,
+// so changing the rules never rewrites her history or moves her back.
+const RULES_V2_FROM = '2026-10-13';
+function needV1(level){ return level <= 2 ? 2 : level <= 12 ? 3 : level <= 25 ? 2 : 3; }
+function capV1(level){ return level <= 12 ? 3 : level <= 25 ? 2 : 1; }
 
 function sortedByDate(list){
   return list.slice().sort((a,b)=> (a.date < b.date ? -1 : a.date > b.date ? 1 : 0) || ((a.createdAt||0)-(b.createdAt||0)) || (a.id > b.id ? 1 : -1));
@@ -64,12 +69,13 @@ function computeState(depList, startLevel){
       wob = 0; wobMin = null;
       if(hard){
         run++; runDates.add(e.date);
-        if(run >= need(level)){
+        const v2 = e.date >= RULES_V2_FROM, needNow = v2 ? need(level) : needV1(level), capNow = v2 ? capFor(level) : capV1(level);
+        if(run >= needNow){
           const used = adv[e.date] || 0;
           if(level >= TOP){ run = 0; runDates = new Set(); lastEvent = 'top'; }
-          else if(level === GATE && runDates.size < GATE_DAYS){ lastEvent = 'gate'; }   // calm enough, but needs a second day
-          else if(used < capFor(level)){ level++; run = 0; runDates = new Set(); adv[e.date] = used + 1; lastEvent = 'advance'; }
-          else { run = need(level); lastEvent = 'capped'; }
+          else if(v2 && level === GATE && runDates.size < GATE_DAYS){ lastEvent = 'gate'; }   // calm enough, but needs a second day
+          else if(used < capNow){ level++; run = 0; runDates = new Set(); adv[e.date] = used + 1; lastEvent = 'advance'; }
+          else { run = needNow; lastEvent = 'capped'; }
         } else {
           lastEvent = 'calmProgress';
           nextEasy = (run === 1 && level >= FIRST_OUT);
@@ -425,4 +431,4 @@ function buildSummary(entries, days, date, place){
   return L.join('\n');
 }
 
-if(typeof module !== 'undefined') module.exports = { DUR, TOP, FIRST_OUT, LAST_CUE, QUICK_CEILING, isQuick, STEP_NAMES, CUE_IDS, idOf, indexOfId, stepLabel, stepTag, stepEst, gapSec, fits, need, capFor, sortedByDate, computeState, depsFor, stateFrom, baselineFor, startFor, skippedRanges, barInfo, levelsAfter, rand01, pickNext, ceilingFor, cooldownMs, waitUntil, coachMsg, normalizeEntry, buildSummary, fmtSec, SESSION_MIN, SESSION_MAX, sessionSizeFor, breakMinFor, isSessionStart, GATE, GATE_DAYS, dateAdd, helpAlerts, windowStats, weekCompare, progressSeries };
+if(typeof module !== 'undefined') module.exports = { DUR, TOP, FIRST_OUT, LAST_CUE, QUICK_CEILING, isQuick, STEP_NAMES, CUE_IDS, idOf, indexOfId, stepLabel, stepTag, stepEst, gapSec, fits, need, capFor, sortedByDate, computeState, depsFor, stateFrom, baselineFor, startFor, skippedRanges, barInfo, levelsAfter, rand01, pickNext, ceilingFor, cooldownMs, waitUntil, coachMsg, normalizeEntry, buildSummary, fmtSec, SESSION_MIN, SESSION_MAX, sessionSizeFor, breakMinFor, isSessionStart, RULES_V2_FROM, GATE, GATE_DAYS, dateAdd, helpAlerts, windowStats, weekCompare, progressSeries };

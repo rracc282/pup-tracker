@@ -4,7 +4,7 @@ const TOP=L.TOP; let fails=[]; let n=0;
 function check(c,msg,ctx){ if(!c){ fails.push(msg+' '+JSON.stringify(ctx||{})); } n++; }
 for(let run=0;run<600;run++){
   const start=Math.floor(rnd()*(TOP+1)); const pFail=[0.05,0.2,0.4][run%3]; const pUp=0.1*rnd();
-  let list=[]; let t=Date.parse('2026-10-01T08:00:00Z'); let day=0; let prevSt=L.computeState([],start);
+  let list=[]; let t=Date.parse('2026-11-01T08:00:00Z'); let day=0; let prevSt=L.computeState([],start);
   const advToday={};
   for(let i=0;i<120;i++){
     const st=L.computeState(list,start);
