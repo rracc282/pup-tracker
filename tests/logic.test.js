@@ -153,18 +153,27 @@ console.log('logic tests (new place) ok');
   assert.strictEqual(L.need(12),4); assert.strictEqual(L.GATE,12);
   assert.strictEqual(L.capFor(3),3); assert.strictEqual(L.capFor(8),2); assert.strictEqual(L.capFor(12),1); assert.strictEqual(L.capFor(21),1); assert.strictEqual(L.capFor(22),2);
   assert.strictEqual(L.need(15),3); assert.strictEqual(L.need(23),2);
-  // asleep reps: from the front door on, at least 2 calm reps must be awake
   { const A=(step,date,asleep)=>Object.assign(G(step,'calm',date),{tags:asleep?['Asleep before']:[]});
-    let s2=L.computeState([A(12,'2026-11-12',1),A(12,'2026-11-12',1),A(12,'2026-11-12',1),A(12,'2026-11-13',1)],12);
-    assert.strictEqual(s2.level,12); assert.strictEqual(s2.lastEvent,'awake');
-    s2=L.computeState([A(12,'2026-11-12',1),A(12,'2026-11-12',1),A(12,'2026-11-12',0),A(12,'2026-11-13',0)],12); assert.strictEqual(s2.level,13);
-    s2=L.computeState([A(5,'2026-11-12',1),A(5,'2026-11-12',1),A(5,'2026-11-12',1)],5); assert.strictEqual(s2.level,6,'before the front door asleep still counts');
+    const D1='2026-11-12', D2='2026-11-13';
+    // each of two days needs at least 2 awake calm reps
+    let s2=L.computeState([A(12,D1,0),A(12,D1,0),A(12,D2,0),A(12,D2,0)],12); assert.strictEqual(s2.level,13);
+    // 1 rep on day one + 3 on day two (her real case): not enough
+    s2=L.computeState([A(12,D1,0),A(12,D2,0),A(12,D2,0),A(12,D2,1)],12); assert.strictEqual(s2.level,12); assert.strictEqual(s2.lastEvent,'gate'); assert.strictEqual(s2.runDays,1);
+    // ...one more awake rep on a second qualifying day moves her
+    s2=L.computeState([A(12,D1,0),A(12,D2,0),A(12,D2,0),A(12,D2,1),A(12,D2,0)],12); assert.strictEqual(s2.level,12);
+    s2=L.computeState([A(12,D1,0),A(12,D1,0),A(12,D2,0),A(12,D2,1),A(12,D2,0)],12); assert.strictEqual(s2.level,13);
+    // asleep reps never count as qualifying
+    s2=L.computeState([A(12,D1,1),A(12,D1,1),A(12,D2,1),A(12,D2,1)],12); assert.strictEqual(s2.level,12);
+    // after the front door at least 2 awake calm reps are still needed
+    s2=L.computeState([A(14,D1,1),A(14,D1,1),A(14,D1,1)],14); assert.strictEqual(s2.level,14); assert.strictEqual(s2.lastEvent,'awake');
+    s2=L.computeState([A(14,D1,1),A(14,D1,0),A(14,D1,0)],14); assert.strictEqual(s2.level,15);
+    s2=L.computeState([A(5,D1,1),A(5,D1,1),A(5,D1,1)],5); assert.strictEqual(s2.level,6,'before the front door asleep still counts');
     s2=L.computeState([A(12,'2026-10-10',1),A(12,'2026-10-10',1),A(12,'2026-10-10',1)],12); assert.strictEqual(s2.level,13,'old reps keep old rules'); }
   // front door: 4 calm on ONE day does not move her up
   const d1=[1,2,3,4,5].map(()=>G(12,'calm','2026-11-12'));
   let s=L.computeState(d1,12); assert.strictEqual(s.level,12); assert.strictEqual(s.lastEvent,'gate'); assert.strictEqual(s.runDays,1);
-  // ...a calm rep on a second day does
-  s=L.computeState(d1.concat([G(12,'calm','2026-11-13')]),12); assert.strictEqual(s.level,13);
+  // ...two calm reps on a second day do
+  s=L.computeState(d1.concat([G(12,'calm','2026-11-13'),G(12,'calm','2026-11-13')]),12); assert.strictEqual(s.level,13);
   // a wobble in between resets the count and the day tally
   s=L.computeState([G(12,'calm','2026-11-12'),G(12,'calm','2026-11-12'),G(12,'mild','2026-11-12'),G(12,'calm','2026-11-13'),G(12,'calm','2026-11-13'),G(12,'calm','2026-11-13'),G(12,'calm','2026-11-13')],12);
   assert.strictEqual(s.level,12,'a single day after a reset is still not enough');
@@ -206,7 +215,8 @@ console.log('logic tests (gate, caps, warm-up) ok');
   assert.strictEqual(gs.level,12,'history is replayed under the old rules'); assert.strictEqual(gs.run,1);
   // new rules from the cutover day: the front door now needs 4 calm on 2 days (today counts as day 1)
   const tomorrow=['2026-10-13','2026-10-13','2026-10-13'].map(d=>H(12,'calm',d));
-  const g2=L.computeState(hist.concat(tomorrow),6); assert.strictEqual(g2.level,13);
+  const g2=L.computeState(hist.concat(tomorrow),6); assert.strictEqual(g2.level,12,'1 rep on day one and 3 on day two is not enough'); assert.strictEqual(g2.lastEvent,'gate');
   const g3=L.computeState(hist.concat(tomorrow.slice(0,2)),6); assert.strictEqual(g3.level,12);
+  const g4=L.computeState(hist.concat([H(12,'calm','2026-10-12')]).concat(tomorrow.slice(0,2)),6); assert.strictEqual(g4.level,13,'2 awake calm reps on each of two days moves her');
 }
 console.log('logic tests (grandfathering) ok');
