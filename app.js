@@ -1,6 +1,6 @@
 // Churro tracker app. Uses logic.js (pure) and Supabase (sync + push queue).
 'use strict';
-const APP_VERSION = '29';
+const APP_VERSION = '30';
 const CFG = window.PT_CONFIG || {};
 const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -511,7 +511,7 @@ function renderRep(){
     const st = stateFrom(live, place);
     const nx = pickNext(st, effPocket(st), place + '|' + depsFor(live, place).length + '|' + st.level, { sessionStart: isSessionStart(liveEntries(), Date.now()) });
     let sub;
-    if(nx.kind === 'warmup') sub = 'Warm-up: an easier rep to start the session. It does not count toward moving up. Your working step is ' + stepLabel(st.level) + '.';
+    if(nx.kind === 'warmup') sub = 'Warm-up to start the session. It does not count toward moving up, and your step has not changed. Your working step is still ' + stepLabel(st.level) + '.';
     else if(nx.fitted) sub = 'A shorter practice rep that fits your time. Your working step is ' + stepLabel(st.level) + '.';
     else if(nx.kind === 'decoy') sub = 'No leaving this time. These keep the cues from always meaning you are going.';
     else if(nx.afterWobble) sub = 'Easier on purpose after the wobble. Your working step is ' + stepLabel(st.level) + '.';
@@ -522,7 +522,7 @@ function renderRep(){
     const blocked = (!!waitInfo() || capReached(nx.step)) && !ui.override;
     const keep = ui.feedback ? feedbackHtml() : '';
     el.innerHTML = keep + bannersHtml(nx.step) +
-      `<div class="eyebrow">Next rep · ${esc(stepTag(nx.step))}${nx.step < FIRST_OUT ? ' · ' + esc(cueName(nx.step)) : ''}</div>
+      `<div class="eyebrow">${nx.kind === 'warmup' ? 'Warm-up rep · easier on purpose' : 'Next rep'} · ${esc(stepTag(nx.step))}${nx.step < FIRST_OUT ? ' · ' + esc(cueName(nx.step)) : ''}</div>
        <div class="rep-label">${esc(stepLabel(nx.step))}</div>
        <div class="rep-sub">${esc(sub)}</div>
        <ul class="steps">${instructionsFor(nx.step).map(t => `<li>${esc(t)}</li>`).join('')}</ul>
