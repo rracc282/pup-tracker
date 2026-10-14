@@ -349,7 +349,10 @@ function progressSeries(entries, place){
     if(e.outcome === 'calm' && e.step >= LAST_CUE && DUR[e.step] != null) d.maxCalm = Math.max(d.maxCalm == null ? 0 : d.maxCalm, DUR[e.step]);
     byDay.set(e.date, d);
   });
-  return Array.from(byDay.values());
+  // The graph starts on the first day she actually did the front door step (or beyond), not with the early cue work.
+  const firstDoor = mine.find(e => e.step >= LAST_CUE);
+  const all = Array.from(byDay.values());
+  return firstDoor ? all.filter(d => d.date >= firstDoor.date) : all;
 }
 
 function buildSummary(entries, days, date, place){

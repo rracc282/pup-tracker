@@ -1,6 +1,6 @@
 // Churro tracker app. Uses logic.js (pure) and Supabase (sync + push queue).
 'use strict';
-const APP_VERSION = '32';
+const APP_VERSION = '33';
 const CFG = window.PT_CONFIG || {};
 const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -656,7 +656,7 @@ function progressHtml(){
   const st0 = stateFrom(ladderEntries(), place);
   if(st0.level < FIRST_OUT) return '';
   let s = progressSeries(liveEntries(), place);
-  if(!s || s.length < 2) return s ? '<div class="hint">The graph appears after a second day of training.</div>' : '';
+  if(!s || s.length < 2) return s ? '<div class="hint">The graph starts on the first day of the front door step and needs a second day to draw a line.</div>' : '';
   s = s.slice(-28);
   const W = 320, H = 230, L = 50, R = 12, T = 14, B = 34;
   const top = T, floor = H - B - 18;               // plot area; the floor band holds "door only"
