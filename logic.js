@@ -342,8 +342,14 @@ function progressSeries(entries, place){
   if(!mine.length) return null;
   const lv = levelsAfter(mine, startFor(entries, place));
   const byDay = new Map();
-  mine.forEach((e, i) => byDay.set(e.date, lv[i]));
-  return Array.from(byDay, ([date, level]) => ({ date, level }));
+  mine.forEach((e, i) => {
+    const d = byDay.get(e.date) || { date: e.date, level: 0, maxCalm: null };
+    d.level = lv[i];
+    // longest time outside that she managed calmly that day (0 = only the front door)
+    if(e.outcome === 'calm' && e.step >= LAST_CUE && DUR[e.step] != null) d.maxCalm = Math.max(d.maxCalm == null ? 0 : d.maxCalm, DUR[e.step]);
+    byDay.set(e.date, d);
+  });
+  return Array.from(byDay.values());
 }
 
 function buildSummary(entries, days, date, place){

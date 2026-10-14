@@ -37,6 +37,10 @@
     --upset-bg:#F8E1DC;
     --radius:16px;
   }
+  .legend{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:12px;color:var(--ink-2);margin:6px 0 4px;}
+  .legend span{display:inline-flex;align-items:center;gap:6px;}
+  .lg-dot{width:10px;height:10px;border-radius:50%;background:var(--calm);display:inline-block;}
+  .lg-dia{width:8px;height:8px;border:1.6px solid var(--ink);background:var(--surface);transform:rotate(45deg);display:inline-block;}
   @media (prefers-color-scheme: dark){
     :root:not([data-theme="light"]){
       --bg:#0F1A18;
@@ -406,9 +410,9 @@
 <dialog id="stepsSheet"><div class="stack" id="stepsBody"></div></dialog>
 <dialog id="eodSheet"><div class="stack" id="eodBody"></div></dialog>
 
-<script src="config.js?v=31"></script>
-<script src="supabase.js?v=31"></script>
-<script src="logic.js?v=31"></script>
-<script src="app.js?v=31"></script>
+<script src="config.js?v=32"></script>
+<script src="supabase.js?v=32"></script>
+<script src="logic.js?v=32"></script>
+<script src="app.js?v=32"></script>
 </body>
 </html>

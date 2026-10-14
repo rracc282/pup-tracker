@@ -1,6 +1,6 @@
 // Churro tracker app. Uses logic.js (pure) and Supabase (sync + push queue).
 'use strict';
-const APP_VERSION = '31';
+const APP_VERSION = '32';
 const CFG = window.PT_CONFIG || {};
 const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -655,15 +655,36 @@ function weekHtml(){
 function progressHtml(){
   const st0 = stateFrom(ladderEntries(), place);
   if(st0.level < FIRST_OUT) return '';
-  const s = progressSeries(liveEntries(), place);
-  if(!s || s.length < 2) return s ? '<div class="hint">The line appears after a second day of training.</div>' : '';
-  const W = 300, H = 90, P = 6;
-  const x = i => P + (W - 2 * P) * (s.length === 1 ? 0 : i / (s.length - 1));
-  const y = v => H - P - (H - 2 * P) * (v / TOP);
-  const pts = s.map((p, i) => x(i).toFixed(1) + ',' + y(p.level).toFixed(1)).join(' ');
+  let s = progressSeries(liveEntries(), place);
+  if(!s || s.length < 2) return s ? '<div class="hint">The graph appears after a second day of training.</div>' : '';
+  s = s.slice(-28);
+  const W = 320, H = 230, L = 50, R = 12, T = 14, B = 34;
+  const top = T, floor = H - B - 18;               // plot area; the floor band holds "door only"
+  const secOf = lv => (lv >= FIRST_OUT ? DUR[lv] : 0);
+  const MIN = 2, MAX = DUR[TOP];
+  const yOf = sec => sec < MIN ? floor : (floor - 22) - ((floor - 22) - top) * (Math.log(sec / MIN) / Math.log(MAX / MIN));
+  const dayNum = d => { const [y, m, dd] = d.split('-').map(Number); return Math.round(Date.UTC(y, m - 1, dd) / 86400000); };
+  const d0 = dayNum(s[0].date), span = Math.max(1, dayNum(s[s.length - 1].date) - d0);
+  const xOf = d => L + (W - L - R) * ((dayNum(d) - d0) / span);
+  const ticks = [[0, 'Door only'], [2, '2 s'], [10, '10 s'], [60, '1 min'], [300, '5 min'], [3600, '1 h'], [14400, '4 h goal']];
+  let g = '';
+  ticks.forEach(([sec, lab]) => {
+    const y = yOf(sec).toFixed(1), goal = sec === 14400;
+    g += `<line x1="${L}" x2="${W - R}" y1="${y}" y2="${y}" stroke="var(--line)" stroke-width="1"${goal ? ' stroke-dasharray="4 3"' : ''}/><text x="${L - 6}" y="${(+y + 3).toFixed(1)}" text-anchor="end" font-size="9" fill="var(--ink-2)">${lab}</text>`;
+  });
+  const nx = Math.min(5, s.length), xl = new Set();
+  for(let k = 0; k < nx; k++) xl.add(Math.round(k * (s.length - 1) / Math.max(1, nx - 1)));
+  let xa = `<line x1="${L}" x2="${W - R}" y1="${floor + 12}" y2="${floor + 12}" stroke="var(--ink-2)" stroke-width="1"/>`;
+  xl.forEach(k => { const p = s[k], x = xOf(p.date).toFixed(1); xa += `<line x1="${x}" x2="${x}" y1="${floor + 12}" y2="${floor + 16}" stroke="var(--ink-2)"/><text x="${x}" y="${floor + 28}" text-anchor="middle" font-size="9" fill="var(--ink-2)">${p.date.slice(8)}/${p.date.slice(5, 7)}</text>`; });
+  const wpts = s.map(p => xOf(p.date).toFixed(1) + ',' + yOf(secOf(p.level)).toFixed(1)).join(' ');
+  const wdots = s.map(p => `<circle cx="${xOf(p.date).toFixed(1)}" cy="${yOf(secOf(p.level)).toFixed(1)}" r="2.5" fill="var(--calm)"/>`).join('');
+  const cdots = s.filter(p => p.maxCalm != null).map(p => `<rect x="${(xOf(p.date) - 3.5).toFixed(1)}" y="${(yOf(p.maxCalm) - 3.5).toFixed(1)}" width="7" height="7" transform="rotate(45 ${xOf(p.date).toFixed(1)} ${yOf(p.maxCalm).toFixed(1)})" fill="var(--surface)" stroke="var(--ink)" stroke-width="1.6"/>`).join('');
   const last = s[s.length - 1];
-  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Working step over time" style="width:100%;height:auto"><polyline points="${pts}" fill="none" stroke="var(--calm)" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/><circle cx="${x(s.length - 1).toFixed(1)}" cy="${y(last.level).toFixed(1)}" r="4.5" fill="var(--calm)"/></svg>
-    <div class="hint">${esc(fmtDay(s[0].date))} to ${esc(fmtDay(last.date))}. Now: ${esc(stepLabel(last.level))}.</div>`;
+  const best = Math.max.apply(null, s.map(p => p.maxCalm == null ? -1 : p.maxCalm));
+  const desc = `Working step over time. Now: ${stepLabel(last.level)}.` + (best >= 0 ? ` Longest calm rep so far: ${best === 0 ? 'front door only' : fmtSec(best)}.` : '');
+  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(desc)}" style="width:100%;height:auto">${g}${xa}<polyline points="${wpts}" fill="none" stroke="var(--calm)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>${cdots}${wdots}</svg>
+    <div class="legend"><span><i class="lg-dot"></i>Working step (time outside)</span><span><i class="lg-dia"></i>Longest calm rep that day</span></div>
+    <div class="hint">Height is time outside on a stretched scale, so each line up is a bigger jump than the one below. Now: ${esc(stepLabel(last.level))}${best > 0 ? '. Longest calm so far: ' + esc(fmtSec(best)) : ''}.</div>`;
 }
 function moreSec(id, title, body, forceOpen){
   if(!body) return '';
