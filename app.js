@@ -1,6 +1,6 @@
 // Churro tracker app. Uses logic.js (pure) and Supabase (sync + push queue).
 'use strict';
-const APP_VERSION = '33';
+const APP_VERSION = '34';
 const CFG = window.PT_CONFIG || {};
 const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -135,12 +135,19 @@ async function pullAll(){
     const m = new Map(); r.data.forEach(row => { const e = entryOf(row); m.set(e.id, e); });
     // keep what is still waiting in the outbox
     outbox.forEach(o => { if(o.t === 'rep') m.set(o.row.id, entryOf(o.row)); if(o.t === 'daydel') m.delete(o.row.id); });
-    repMap = m; rebuild();
+    repMap = m; rebuild(); fixPlannedTimes();
     const dd = {}; d.data.forEach(x => { dd[x.date] = { day_type:x.day_type, medicated:x.medicated, place:x.place }; });
     outbox.forEach(o => { if(o.t === 'day') dd[o.row.date] = { day_type:o.row.day_type, medicated:o.row.medicated, place:o.row.place }; });
     days = dd; cacheSave(); setStatus('Synced. ' + entries.length + ' entries.'); setSync(); render();
     maybeDeepLink();
   }catch(e){ setStatus('Could not read saved reps: ' + (e && e.message || 'unknown error')); }
+}
+// One-time fix: the very first 2 s departures were logged late (she was watching the camera), so their stored time ran long.
+function fixPlannedTimes(){
+  if(lsGet('pt-fix-2s') || !entries.length) return;
+  entries.filter(e => e.kind === 'dep' && e.step === FIRST_OUT && !e.byPlan && e.actualSec != null && e.actualSec > DUR[FIRST_OUT] && e.actualSec <= 10 && e.date >= RULES_V2_FROM)
+    .forEach(e => putEntry(Object.assign({}, e, { actualSec: DUR[FIRST_OUT], byPlan: true })));
+  lsSet('pt-fix-2s', '1');
 }
 function subscribeRealtime(){
   sb.channel('pt-live')
@@ -558,6 +565,7 @@ function renderRep(){
       ${timed ? '<div class="tbar"><div id="tFill"></div></div>' : ''}
       <div class="tnote${timed && r.alerted ? ' alert' : ''}" id="tNote">${timed ? (r.alerted ? 'Time is up. Go back in calmly.' : 'Stay out until the beep.') : idleNote}</div>
       <button class="btn primary" data-action="back">${timed ? 'I am back' : 'Done'}</button>
+      ${timed && DUR[r.step] <= 300 ? `<button class="btn" data-action="skiptimer">Watching the camera? Skip the timer and log ${esc(fmtSec(DUR[r.step]))}</button>` : ''}
       ${timed ? '<button class="btn danger" data-action="early">Back early. She is escalating</button>' : ''}`;
     tick();
     return;
@@ -571,6 +579,7 @@ function renderRep(){
         <button class="out mild" data-out="mild"><b>Wobble</b><span>${esc(oh.mild)}</span></button>
         <button class="out escalated" data-out="escalated"><b>Upset</b><span>${esc(oh.escalated)}</span></button>
       </div>
+      ${r.kind === 'dep' && r.step >= FIRST_OUT && !r.byPlan && r.actualSec > DUR[r.step] && DUR[r.step] <= 300 ? `<div class="link-row"><button class="link" data-action="useplan">Timer ran long? Log the planned ${esc(fmtSec(DUR[r.step]))} instead</button></div>` : ''}
       <div class="hint" style="margin-top:8px">Unsure between two? Pick the harder one. It protects her progress.</div>
       <div class="link-row"><button class="link" data-action="discard">Discard this rep</button></div>`;
   }
@@ -599,7 +608,7 @@ function renderToday(){
 
 function describeEntry(e){
   if(e.kind === 'dep'){
-    return 'Step ' + (e.step+1) + ' · ' + stepLabel(e.step) + (e.step >= FIRST_OUT && e.actualSec != null ? ' (' + fmtSec(e.actualSec) + ')' : '') + ' · ' + OUT_NAME[e.outcome] + (e.medicated ? ' · medicated' : '');
+    return 'Step ' + (e.step+1) + ' · ' + stepLabel(e.step) + (e.step >= FIRST_OUT && e.actualSec != null ? ' (' + fmtSec(e.actualSec) + (e.byPlan ? ', as planned' : '') + ')' : '') + ' · ' + OUT_NAME[e.outcome] + (e.medicated ? ' · medicated' : '');
   }
   if(e.kind === 'rest') return 'Rest block · ' + (e.minutes != null ? e.minutes + ' min' : '') + ' · ' + OUT_NAME[e.outcome];
   if(e.kind === 'alone') return 'Alone time · ' + (e.minutes != null ? e.minutes + ' min' : '') + ' · ' + (OUT_NAME[e.outcome] || '') + (e.trazodone ? ' · trazodone' : '');
@@ -825,6 +834,7 @@ async function saveRep(outcome){
   } else {
     data = Object.assign(base, { kind:'dep', level: before.level, step:r.step, early: !!r.early });
     if(DUR[r.step] != null) data.targetSec = DUR[r.step];
+    if(r.byPlan) data.byPlan = true;
     if(data.medicated) msg = ['Logged as medicated.', 'It does not move your step.'];
     else {
       const after = stateFrom(live.concat([data]), r.place);
@@ -981,6 +991,8 @@ document.addEventListener('click', ev => {
     case 'start': startRep(parseInt(t.dataset.step, 10)); break;
     case 'go': goOut(); break;
     case 'back': finishRun(false); break;
+    case 'skiptimer': { const r = ui.rep; if(r){ r.actualSec = DUR[r.step]; r.byPlan = true; stopTicking(); qCancelId(r.queueId); ui.mode = 'outcome'; saveActive(); render({ rep:true }); } break; }
+    case 'useplan': { const r = ui.rep; if(r){ r.actualSec = DUR[r.step]; r.byPlan = true; saveActive(); render({ rep:true }); } break; }
     case 'early': finishRun(true); break;
     case 'cancel': case 'discard': cancelRep(); break;
     case 'startrest': startRest(); break;
