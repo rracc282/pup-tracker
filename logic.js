@@ -216,6 +216,7 @@ function ceilingFor(dateObj, dayType){
   if(dayType === 'home') return 10;
   if(dayType === 'weekend') return 8;
   if(dayType === 'sitter') return 5;
+  if(dayType === 'rest') return 5;
   const d = dateObj.getDay();
   if(d === 3) return 10;
   if(d === 0 || d === 6) return 8;
@@ -223,9 +224,16 @@ function ceilingFor(dateObj, dayType){
 }
 
 // Recovery: how long she rests after a rep before the next one.
+// The rest between reps grows smoothly with the time she was out, and varies by 0 to 50% so it is never a fixed script.
+// Never shorter than the old fixed gap. Derived from the rep's timestamp, so every device agrees.
+function restSec(step, ts){
+  const base = gapSec(step);
+  const grown = step < FIRST_OUT ? base : Math.min(1800, 120 + 150 * Math.sqrt((DUR[step] || 0) / 60));
+  return Math.round(Math.max(base, grown) * (1 + 0.5 * hash01((ts || 0) + 31)));
+}
 function cooldownMs(e){
   if(e.outcome === 'escalated') return 3 * 3600 * 1000;
-  let sec = gapSec(e.step);
+  let sec = restSec(e.step, e.createdAt);
   if(e.outcome === 'mild') sec *= 2;
   return sec * 1000;
 }
@@ -235,6 +243,13 @@ const SESSION_MIN = 3, SESSION_MAX = 6, SESSION_GAP_MS = 45 * 60 * 1000;
 function hash01(n){ let x = (Math.floor(n / 1000) ^ 0x9e3779b9) >>> 0; x = Math.imul(x ^ (x >>> 16), 0x45d9f3b) >>> 0; x = Math.imul(x ^ (x >>> 16), 0x45d9f3b) >>> 0; x = (x ^ (x >>> 16)) >>> 0; return x / 4294967296; }
 function sessionSizeFor(startTs){ return SESSION_MIN + Math.floor(hash01(startTs) * (SESSION_MAX - SESSION_MIN + 1)); }
 function breakMinFor(lastTs){ return 45 + 5 * Math.floor(hash01(lastTs + 7919) * 10); }
+// How many separate sessions (reps less than 45 min apart belong together) are in this list of reps.
+function sessionCount(reps){
+  const t = reps.map(e => e.createdAt || 0).sort((a, b) => a - b);
+  let n = 0;
+  t.forEach((x, i) => { if(i === 0 || x - t[i - 1] >= SESSION_GAP_MS) n++; });
+  return n;
+}
 // depAll: every live ladder rep, any place. Returns null when no rep has been done yet.
 function waitUntil(depAll){
   if(!depAll.length) return null;
@@ -289,7 +304,7 @@ function fmtDay(iso){
 }
 function hhmm(ms){ const d = new Date(ms); return String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0'); }
 const PLACE_LABEL = { home:'Home (Geneva)', zurich:'Zurich', other:'Elsewhere' };
-const DAY_NAME = { home:'Home day', sitter:'Sitter day', weekend:'Weekend' };
+const DAY_NAME = { home:'Home day', sitter:'Sitter day', weekend:'Weekend', rest:'Rest day' };
 const OUT_LABEL = { calm:'Calm', mild:'Wobble', escalated:'Upset' };
 
 // ---------- watch-outs, weekly comparison, progress line ----------
@@ -447,4 +462,4 @@ function buildSummary(entries, days, date, place){
   return L.join('\n');
 }
 
-if(typeof module !== 'undefined') module.exports = { DUR, TOP, FIRST_OUT, LAST_CUE, QUICK_CEILING, isQuick, STEP_NAMES, CUE_IDS, idOf, indexOfId, stepLabel, stepTag, stepEst, gapSec, fits, need, capFor, sortedByDate, computeState, depsFor, stateFrom, baselineFor, startFor, skippedRanges, barInfo, levelsAfter, rand01, pickNext, ceilingFor, cooldownMs, waitUntil, coachMsg, normalizeEntry, buildSummary, fmtSec, SESSION_MIN, SESSION_MAX, sessionSizeFor, breakMinFor, isSessionStart, RULES_V2_FROM, GATE, GATE_DAYS, GATE_DAY_REPS, dateAdd, helpAlerts, windowStats, weekCompare, progressSeries };
+if(typeof module !== 'undefined') module.exports = { DUR, TOP, FIRST_OUT, LAST_CUE, QUICK_CEILING, isQuick, STEP_NAMES, CUE_IDS, idOf, indexOfId, stepLabel, stepTag, stepEst, gapSec, fits, need, capFor, sortedByDate, computeState, depsFor, stateFrom, baselineFor, startFor, skippedRanges, barInfo, levelsAfter, rand01, pickNext, ceilingFor, cooldownMs, waitUntil, coachMsg, normalizeEntry, buildSummary, fmtSec, sessionCount, restSec, SESSION_MIN, SESSION_MAX, sessionSizeFor, breakMinFor, isSessionStart, RULES_V2_FROM, GATE, GATE_DAYS, GATE_DAY_REPS, dateAdd, helpAlerts, windowStats, weekCompare, progressSeries };

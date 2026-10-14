@@ -1,6 +1,6 @@
 // Churro tracker app. Uses logic.js (pure) and Supabase (sync + push queue).
 'use strict';
-const APP_VERSION = '35';
+const APP_VERSION = '36';
 const CFG = window.PT_CONFIG || {};
 const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -42,7 +42,7 @@ const PRE_STATES = [['Awake before','Awake'],['Dozing before','Dozing'],['Asleep
 const TAG_LABEL = { 'Dozing before':'Dozing', 'Asleep before':'Asleep', 'Awake before':'Awake', 'Settled under 10 s':'Under 10 s', 'Settled under 1 min':'Under 1 min', 'Took over 1 min':'Over 1 min', '@walked':'Walked first' };
 const REACTION_TAGS_OLD = ['Asleep before','Awake before','Head up','Stood up','Followed me','Went to the door','Vocalised','Settled under 10 s','Settled under 1 min','Took over 1 min','Outside noise'];
 const SPOTS = ['Sofa','Bed','Crate','Floor'];
-const DAY_TYPES = [['home','Home','Most of the day at home. Room for up to 10 longer reps.'],['sitter','Sitter','Sitter has her. Up to 5 longer reps, plenty of quick ones.'],['weekend','Weekend','We may be out a lot. Up to 8 longer reps. Gentle.']];
+const DAY_TYPES = [['home','Home','Most of the day at home. Room for up to 10 longer reps.'],['sitter','Sitter','Sitter has her. Up to 5 longer reps, plenty of quick ones.'],['weekend','Weekend','We may be out a lot. Up to 8 longer reps. Gentle.'],['rest','Rest day','No training today. She just relaxes. Days off help both of you.']];
 
 // ---------- state ----------
 let sb = null, session = null;
@@ -232,6 +232,8 @@ function scheduleReady(){
     const live = liveEntries().filter(e => e.kind === 'dep');
     const w = waitUntil(live);
     if(!w || w.until <= Date.now() + 5000) return;
+    if(restDayStop()) return;
+    if(optOn('eve')){ const u = new Date(w.until); if(u.getHours() * 60 + u.getMinutes() >= 20 * 60 + 30) return; }
     const last = live.slice().sort((a,b) => a.createdAt - b.createdAt).pop();
     if(last.outcome === 'escalated') return;
     const st = stateFrom(liveEntries(), place);
@@ -512,6 +514,25 @@ function bannersHtml(step){
   return h;
 }
 
+// Optional pacing helpers (saved on this device, on by default).
+function optOn(k){ return lsGet('pt-opt-' + k) !== '0'; }
+function eveningStop(){
+  if(!optOn('eve') || lsGet('pt-eve-ok') === todayStr()) return false;
+  const d = new Date(); return d.getHours() * 60 + d.getMinutes() >= 20 * 60 + 30;
+}
+function sessionStop(st){
+  if(!optOn('2s') || lsGet('pt-ses-ok') === todayStr() || st.level < GATE) return false;
+  const deps = todayDeps();
+  return sessionCount(deps) >= 2 && isSessionStart(deps, Date.now());
+}
+function restDayStop(){ return dayType() === 'rest' && lsGet('pt-rest-ok') !== todayStr(); }
+function stopCard(){
+  const st = stateFrom(ladderEntries(), place);
+  if(restDayStop()) return ['Rest day', 'No training today', 'You marked today as a rest day. Days off give her and you a break, and the ladder keeps your place.', 'restok', 'Train anyway'];
+  if(sessionStop(st)) return ['Two sessions done', 'That is enough for today', 'Two sessions is plenty at this stage. More will not speed things up, and she is better off with a calm rest of the day.', 'sesok', 'Keep training today'];
+  if(eveningStop()) return ['Evening stop', 'Time to wind down', 'It is after 20:30. Evening training is fine when it suits you. Keep it short and calm, and let her settle well before bed.', 'eveok', 'Keep training tonight'];
+  return null;
+}
 function isClosedToday(){ return lsGet('pt-closed') === todayStr(); }
 function closeDay(){ lsSet('pt-closed', todayStr()); qCancelKind('ready'); }
 function reopenDay(){ try{ localStorage.removeItem('pt-closed'); }catch(e){} scheduleReady(); render({ rep:true }); }
@@ -523,6 +544,14 @@ function renderRep(){
       <div class="rep-label">Done for today</div>
       <div class="rep-sub">Training is paused until tomorrow. She can relax, and so can you. No more reps or reminders tonight.</div>
       <div class="link-row"><button class="link" data-action="reopenday">Keep training today</button></div>`;
+    return;
+  }
+  if(ui.mode === 'idle' && stopCard()){
+    const [eb, head, txt, act, lab] = stopCard();
+    el.innerHTML = (ui.feedback ? feedbackHtml() : '') + `<div class="eyebrow">${esc(eb)}</div>
+      <div class="rep-label">${esc(head)}</div>
+      <div class="rep-sub">${esc(txt)}</div>
+      <div class="link-row"><button class="link" data-action="${act}">${esc(lab)}</button></div>`;
     return;
   }
   if(ui.mode === 'idle'){
@@ -727,11 +756,15 @@ function renderMore(){
       <button class="btn sm" data-action="setbase">Set step for ${esc(PLACE_NAME[place])}</button>`;
   const notif = `<div class="hint">${pushOn ? 'On for this device.' : perm === 'denied' ? 'Blocked in iOS settings for this app.' : perm === 'unsupported' ? 'Open this from the Home Screen icon to turn them on.' : 'Off on this device.'}</div>
       ${pushOn ? '<button class="btn sm" data-action="pushtest">Send a test notification</button>' : (perm === 'denied' || perm === 'unsupported' ? '' : '<button class="btn sm primary" data-action="pushon">Turn on notifications</button>')}`;
+  const pace = `<div class="hint">Gentle limits that show a "wind down" card instead of the next rep. You can always tap "Keep training" to carry on.</div>
+      <div class="toggle"><div><b>Evening stop at 20:30</b></div><button class="chip" data-action="opttoggle" data-opt="eve" aria-pressed="${optOn('eve')}">${optOn('eve') ? 'On' : 'Off'}</button></div>
+      <div class="toggle"><div><b>Two sessions a day</b><span class="hint">From the front door step up.</span></div><button class="chip" data-action="opttoggle" data-opt="2s" aria-pressed="${optOn('2s')}">${optOn('2s') ? 'On' : 'Off'}</button></div>`;
   const backup = `<button class="btn sm" data-action="export">Download backup</button>
       <label class="btn sm" style="text-align:center">Import a backup file<input type="file" id="importFile" accept="application/json,.json" hidden></label>`;
   $('moreList').innerHTML =
     moreSec('week', 'This week vs last week', weekHtml()) +
     moreSec('alone', 'Real alone time', alone, !!a) +
+    moreSec('pace', 'Pacing options', pace) +
     moreSec('step', 'Set my step', step) +
     moreSec('claude', 'Claude link', `<div class="hint">Optional. Paste the web address of your Churro project from your Claude account (open the project, copy the address). "Request feedback" will open it. Leave empty to open a new chat.</div><input class="txt" id="claudeUrl" type="url" placeholder="https://claude.ai/project/..." value="${esc(lsGet('pt-claude-url') || '')}"><button class="btn sm" data-action="saveclaudeurl">Save link</button>`) +
     moreSec('notif', 'Notifications', notif) +
@@ -1035,6 +1068,10 @@ document.addEventListener('click', ev => {
     case 'closesheet': $('daySheet').close(); $('eodSheet').close(); $('stepsSheet').close(); break;
     case 'eod': openEod(); render({ rep:true }); break;
     case 'reopenday': reopenDay(); break;
+    case 'restok': lsSet('pt-rest-ok', todayStr()); render({ rep:true }); break;
+    case 'sesok': lsSet('pt-ses-ok', todayStr()); render({ rep:true }); break;
+    case 'eveok': lsSet('pt-eve-ok', todayStr()); render({ rep:true }); break;
+    case 'opttoggle': { const k = t.dataset.opt; lsSet('pt-opt-' + k, optOn(k) ? '0' : '1'); renderMore(); render({ rep:true }); break; }
     case 'eodsend': sendEod(); break;
     case 'saveclaudeurl': { const v = ($('claudeUrl').value || '').trim(); if(v && !/^https:\/\/claude\.ai\//.test(v)){ setStatus('That does not look like a claude.ai link.'); break; } lsSet('pt-claude-url', v); setStatus(v ? 'Saved.' : 'Cleared. It will open a new chat.'); break; }
     case 'aloneopen': ui.alone = { minutes:'', outcome:'calm', notes:'' }; renderMore(); break;

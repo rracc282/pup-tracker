@@ -28,8 +28,12 @@ assert.strictEqual(L.ceilingFor(new Date(2026,9,7),null),10); // Wednesday
 assert.strictEqual(L.ceilingFor(new Date(2026,9,8),null),5);
 // wait: calm cue -> 120 s; wobble doubles; upset 3 h; 5 in a row -> 1 h break
 let w=L.waitUntil([rep(0,'calm')]); assert.strictEqual(w.until-w.until+120000,120000);
-let a=rep(0,'calm'); assert.strictEqual(L.waitUntil([a]).until,a.createdAt+120000);
-a=rep(0,'mild'); assert.strictEqual(L.waitUntil([a]).until,a.createdAt+240000);
+let a=rep(0,'calm'); { const g=L.waitUntil([a]).until-a.createdAt; assert(g>=120000&&g<=180000,'rest 1 to 1.5x the base: '+g); }
+a=rep(0,'mild'); { const g=L.waitUntil([a]).until-a.createdAt; assert(g>=240000&&g<=360000,'wobble doubles: '+g); }
+// rests grow with the time out and vary, never below the old fixed gap
+assert(L.restSec(13,1e12)<L.restSec(25,1e12)&&L.restSec(25,1e12)<=2700);
+assert(new Set(Array.from({length:50},(_,k)=>L.restSec(20,1e12+k*7000))).size>10,'rests vary');
+assert.strictEqual(L.sessionCount([{createdAt:0},{createdAt:600000},{createdAt:4000000}]),2);
 a=rep(0,'escalated'); assert.strictEqual(L.waitUntil([a]).until,a.createdAt+3*3600000);
 const base=Date.now(); const mkRun=n=>Array.from({length:n},(_,i)=>Object.assign(rep(0,'calm'),{createdAt:base+i*300000}));
 const sz=L.sessionSizeFor(base); assert(sz>=3&&sz<=6);
