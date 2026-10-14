@@ -1,6 +1,6 @@
 // Churro tracker app. Uses logic.js (pure) and Supabase (sync + push queue).
 'use strict';
-const APP_VERSION = '34';
+const APP_VERSION = '35';
 const CFG = window.PT_CONFIG || {};
 const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -227,6 +227,7 @@ const TEST_MSGS = [
 ];
 function rnd(a){ return a[Math.floor(Math.random() * a.length)]; }
 function scheduleReady(){
+  if(lsGet('pt-closed') === todayStr()) return;
   qCancelKind('ready').then(() => {
     const live = liveEntries().filter(e => e.kind === 'dep');
     const w = waitUntil(live);
@@ -292,6 +293,7 @@ function claudeUrl(){
   return /^https:\/\/claude\.ai\//.test(u) ? u : 'https://claude.ai/new';
 }
 function openEod(){
+  if(ui.mode === 'idle') closeDay();
   $('eodBody').innerHTML = `<h2>End of day</h2>
     <label class="label" for="eodExtra">Any questions or anything to add about today?</label>
     <textarea class="note" id="eodExtra" placeholder="Optional. Dictate with the mic on your keyboard."></textarea>
@@ -510,9 +512,19 @@ function bannersHtml(step){
   return h;
 }
 
+function isClosedToday(){ return lsGet('pt-closed') === todayStr(); }
+function closeDay(){ lsSet('pt-closed', todayStr()); qCancelKind('ready'); }
+function reopenDay(){ try{ localStorage.removeItem('pt-closed'); }catch(e){} scheduleReady(); render({ rep:true }); }
 function renderRep(){
   const el = $('repCard');
   const r = ui.rep;
+  if(ui.mode === 'idle' && isClosedToday()){
+    el.innerHTML = (ui.feedback ? feedbackHtml() : '') + `<div class="eyebrow">Rest mode</div>
+      <div class="rep-label">Done for today</div>
+      <div class="rep-sub">Training is paused until tomorrow. She can relax, and so can you. No more reps or reminders tonight.</div>
+      <div class="link-row"><button class="link" data-action="reopenday">Keep training today</button></div>`;
+    return;
+  }
   if(ui.mode === 'idle'){
     const live = ladderEntries();
     const st = stateFrom(live, place);
@@ -1021,7 +1033,8 @@ document.addEventListener('click', ev => {
       liveEntries().filter(e => e.kind === 'dep' && e.date === todayStr()).forEach(e => { const m = isMedicated(); if(!!e.medicated !== m) putEntry(Object.assign({}, e, { medicated: m })); });
       openDaySheet(); render({ rep:true }); break;
     case 'closesheet': $('daySheet').close(); $('eodSheet').close(); $('stepsSheet').close(); break;
-    case 'eod': openEod(); break;
+    case 'eod': openEod(); render({ rep:true }); break;
+    case 'reopenday': reopenDay(); break;
     case 'eodsend': sendEod(); break;
     case 'saveclaudeurl': { const v = ($('claudeUrl').value || '').trim(); if(v && !/^https:\/\/claude\.ai\//.test(v)){ setStatus('That does not look like a claude.ai link.'); break; } lsSet('pt-claude-url', v); setStatus(v ? 'Saved.' : 'Cleared. It will open a new chat.'); break; }
     case 'aloneopen': ui.alone = { minutes:'', outcome:'calm', notes:'' }; renderMore(); break;
