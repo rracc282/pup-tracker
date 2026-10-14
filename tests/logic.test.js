@@ -30,6 +30,10 @@ assert.strictEqual(L.ceilingFor(new Date(2026,9,8),null),5);
 let w=L.waitUntil([rep(0,'calm')]); assert.strictEqual(w.until-w.until+120000,120000);
 let a=rep(0,'calm'); { const g=L.waitUntil([a]).until-a.createdAt; assert(g>=120000&&g<=180000,'rest 1 to 1.5x the base: '+g); }
 a=rep(0,'mild'); { const g=L.waitUntil([a]).until-a.createdAt; assert(g>=240000&&g<=360000,'wobble doubles: '+g); }
+// tiny exposures: bigger sessions, shorter rests
+assert(L.isTiny(12)&&L.isTiny(15)&&!L.isTiny(11)&&!L.isTiny(16));
+{ const sizes=new Set(); for(let k=0;k<300;k++){ const z=L.sessionSizeFor(1e12+k*60000,true); assert(z>=5&&z<=8); sizes.add(z); } assert.strictEqual(sizes.size,4); }
+assert(L.restSec(13,1e12)>=90&&L.restSec(13,1e12)<=135);
 // rests grow with the time out and vary, never below the old fixed gap
 assert(L.restSec(13,1e12)<L.restSec(25,1e12)&&L.restSec(25,1e12)<=2700);
 assert(new Set(Array.from({length:50},(_,k)=>L.restSec(20,1e12+k*7000))).size>10,'rests vary');

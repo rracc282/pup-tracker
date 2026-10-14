@@ -37,7 +37,8 @@ function fmtSec(s){
 function stepLabel(i){ return i < FIRST_OUT ? STEP_NAMES[i] : 'Out for ' + fmtSec(DUR[i]); }
 function stepTag(i){ return i <= 5 ? 'She watches' : i <= 12 ? 'Behind the door' : 'You leave'; }
 function stepEst(i){ return i < FIRST_OUT ? 60 : DUR[i] + 90; }       // seconds one rep takes, including setup
-function gapSec(i){ return i < FIRST_OUT ? 120 : i <= 21 ? 180 : i <= 26 ? 600 : i <= 29 ? 1200 : 1800; } // calm-rep recovery gap
+function isTiny(i){ return i >= LAST_CUE && i <= 15; }   // the front door and the first departures, up to 7 s
+function gapSec(i){ return isTiny(i) ? 90 : i < FIRST_OUT ? 120 : i <= 21 ? 180 : i <= 26 ? 600 : i <= 29 ? 1200 : 1800; } // calm-rep recovery gap
 function fits(i, minutes){ return stepEst(i) <= minutes * 60; }
 // Calm reps in a row needed to move up from this step, and the most step-ups allowed per day.
 // Slow where it matters most: the front-door step and the first real departures (steps up to 60 s).
@@ -228,7 +229,7 @@ function ceilingFor(dateObj, dayType){
 // Never shorter than the old fixed gap. Derived from the rep's timestamp, so every device agrees.
 function restSec(step, ts){
   const base = gapSec(step);
-  const grown = step < FIRST_OUT ? base : Math.min(1800, 120 + 150 * Math.sqrt((DUR[step] || 0) / 60));
+  const grown = (step < FIRST_OUT || isTiny(step)) ? base : Math.min(1800, 120 + 150 * Math.sqrt((DUR[step] || 0) / 60));
   return Math.round(Math.max(base, grown) * (1 + 0.5 * hash01((ts || 0) + 31)));
 }
 function cooldownMs(e){
@@ -241,7 +242,8 @@ function cooldownMs(e){
 // Both are derived from timestamps, so every device agrees and a reload does not change them.
 const SESSION_MIN = 3, SESSION_MAX = 6, SESSION_GAP_MS = 45 * 60 * 1000;
 function hash01(n){ let x = (Math.floor(n / 1000) ^ 0x9e3779b9) >>> 0; x = Math.imul(x ^ (x >>> 16), 0x45d9f3b) >>> 0; x = Math.imul(x ^ (x >>> 16), 0x45d9f3b) >>> 0; x = (x ^ (x >>> 16)) >>> 0; return x / 4294967296; }
-function sessionSizeFor(startTs){ return SESSION_MIN + Math.floor(hash01(startTs) * (SESSION_MAX - SESSION_MIN + 1)); }
+// Tiny exposures (front door up to 7 s) are short and low-stakes, so a session can hold more of them: 5 to 8.
+function sessionSizeFor(startTs, tiny){ const lo = tiny ? 5 : SESSION_MIN, hi = tiny ? 8 : SESSION_MAX; return lo + Math.floor(hash01(startTs) * (hi - lo + 1)); }
 function breakMinFor(lastTs){ return 45 + 5 * Math.floor(hash01(lastTs + 7919) * 10); }
 // How many separate sessions (reps less than 45 min apart belong together) are in this list of reps.
 function sessionCount(reps){
@@ -261,7 +263,7 @@ function waitUntil(depAll){
   for(let i = list.length - 1; i > 0; i--){
     if((list[i].createdAt - list[i-1].createdAt) < SESSION_GAP_MS) run++; else break;
   }
-  const size = sessionSizeFor(list[list.length - run].createdAt || 0);
+  const size = sessionSizeFor(list[list.length - run].createdAt || 0, isTiny(last.step));
   const breakMin = breakMinFor(last.createdAt || 0);
   if(run >= size && last.outcome !== 'escalated'){
     const brk = (last.createdAt || 0) + breakMin * 60 * 1000;
@@ -462,4 +464,4 @@ function buildSummary(entries, days, date, place){
   return L.join('\n');
 }
 
-if(typeof module !== 'undefined') module.exports = { DUR, TOP, FIRST_OUT, LAST_CUE, QUICK_CEILING, isQuick, STEP_NAMES, CUE_IDS, idOf, indexOfId, stepLabel, stepTag, stepEst, gapSec, fits, need, capFor, sortedByDate, computeState, depsFor, stateFrom, baselineFor, startFor, skippedRanges, barInfo, levelsAfter, rand01, pickNext, ceilingFor, cooldownMs, waitUntil, coachMsg, normalizeEntry, buildSummary, fmtSec, sessionCount, restSec, SESSION_MIN, SESSION_MAX, sessionSizeFor, breakMinFor, isSessionStart, RULES_V2_FROM, GATE, GATE_DAYS, GATE_DAY_REPS, dateAdd, helpAlerts, windowStats, weekCompare, progressSeries };
+if(typeof module !== 'undefined') module.exports = { DUR, TOP, FIRST_OUT, LAST_CUE, QUICK_CEILING, isQuick, STEP_NAMES, CUE_IDS, idOf, indexOfId, stepLabel, stepTag, stepEst, gapSec, fits, need, capFor, sortedByDate, computeState, depsFor, stateFrom, baselineFor, startFor, skippedRanges, barInfo, levelsAfter, rand01, pickNext, ceilingFor, cooldownMs, waitUntil, coachMsg, normalizeEntry, buildSummary, fmtSec, sessionCount, isTiny, restSec, SESSION_MIN, SESSION_MAX, sessionSizeFor, breakMinFor, isSessionStart, RULES_V2_FROM, GATE, GATE_DAYS, GATE_DAY_REPS, dateAdd, helpAlerts, windowStats, weekCompare, progressSeries };

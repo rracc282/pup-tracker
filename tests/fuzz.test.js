@@ -32,7 +32,7 @@ for(let run=0;run<600;run++){
     const w=L.waitUntil(list); check(w&&w.until>=e.createdAt,'wait before rep',{});
     if(out==='escalated') check(w.until-e.createdAt>=3*3600000,'no 3h pause after upset',{});
     if(out==='mild') check(w.until-e.createdAt>=2*L.gapSec(e.step)*1000,'wobble wait not doubled',{});
-    check(w.size>=3&&w.size<=6,'session size range',{size:w.size});
+    check(w.size>=3&&w.size<=(L.isTiny(e.step)?8:6),'session size range',{size:w.size});
   }
   // step-ups per day cap
   const st=L.computeState(list,start);
