@@ -1,12 +1,18 @@
 // Pure training logic. No DOM, no network. Loaded by index.html and tested in node.
 // One ladder. Steps 0-5: a cue while she watches. 6-12: cues while she is behind the closed door. 13 and up: seconds spent outside.
-const DUR = [null,null,null,null,null,null,null,null,null,null,null,null,0,2,4,7,10,15,20,30,45,60,90,120,180,240,300,420,600,900,1200,1800,2700,3600,5400,7200,10800,14400];
+// Time outside per step. Every step has a stable id ('out.<seconds>'), so inserting steps never changes saved history.
+// Jumps between steps are kept to roughly 25-40% so the ladder moves in small increments.
+const DUR = [null,null,null,null,null,null,null,null,null,null,null,null,0,2,3,4,5,7,10,12,15,20,25,30,40,45,60,75,90,120,150,180,240,300,360,420,480,600,750,900,1200,1500,1800,2220,2700,3600,4500,5400,7200,9000,10800,14400];
+// The ladder before the extra steps were added. Only used to read old saved step numbers that have no step name.
+const OLD_DUR = [null,null,null,null,null,null,null,null,null,null,null,null,0,2,4,7,10,15,20,30,45,60,90,120,180,240,300,420,600,900,1200,1800,2700,3600,5400,7200,10800,14400];
+function fromOldIndex(i){ return i < 14 ? i : (OLD_DUR[i] != null ? DUR.indexOf(OLD_DUR[i]) : i); }
 const TOP = DUR.length - 1;
 const FIRST_OUT = 13;
 const LAST_CUE = FIRST_OUT - 1;      // open and close the front door
 const QUICK_CEILING = 15;            // cues and out-steps up to 60 s
-function isQuick(i){ return i <= 21; }
-const MILESTONES = {21:'bins out',26:'parcel pickup',31:'a quick grocery run',33:'a full grocery shop',35:'a drink with friends',37:'a concert'};
+function isQuick(i){ return i < FIRST_OUT || DUR[i] <= 60; }
+const MILESTONES = {};
+[[60,'bins out'],[300,'parcel pickup'],[1800,'a quick grocery run'],[3600,'a full grocery shop'],[7200,'a drink with friends'],[14400,'a concert']].forEach(([sec, name]) => { MILESTONES[DUR.indexOf(sec)] = name; });
 const POCKETS = [[2,'2 min'],[5,'5 min'],[15,'15 min'],[30,'30 min'],[60,'1 h'],[120,'2 h'],[270,'4 h+']];
 const STEP_NAMES = [
   'Coat, she watches','Shoes, she watches','Bag, she watches','Keys, she watches','Bolt, she watches','Coat, shoes, bag, keys, bolt, she watches',
@@ -37,15 +43,15 @@ function fmtSec(s){
 function stepLabel(i){ return i < FIRST_OUT ? STEP_NAMES[i] : 'Out for ' + fmtSec(DUR[i]); }
 function stepTag(i){ return i <= 5 ? 'She watches' : i <= 12 ? 'Behind the door' : 'You leave'; }
 function stepEst(i){ return i < FIRST_OUT ? 60 : DUR[i] + 90; }       // seconds one rep takes, including setup
-function isTiny(i){ return i >= LAST_CUE && i <= 15; }   // the front door and the first departures, up to 7 s
-function gapSec(i){ return isTiny(i) ? 90 : i < FIRST_OUT ? 120 : i <= 21 ? 180 : i <= 26 ? 600 : i <= 29 ? 1200 : 1800; } // calm-rep recovery gap
+function isTiny(i){ return i >= LAST_CUE && DUR[i] <= 7; }   // the front door and the first departures, up to 7 s
+function gapSec(i){ return isTiny(i) ? 90 : i < FIRST_OUT ? 120 : DUR[i] <= 60 ? 180 : DUR[i] <= 300 ? 600 : DUR[i] <= 900 ? 1200 : 1800; } // calm-rep recovery gap
 function fits(i, minutes){ return stepEst(i) <= minutes * 60; }
 // Calm reps in a row needed to move up from this step, and the most step-ups allowed per day.
 // Slow where it matters most: the front-door step and the first real departures (steps up to 60 s).
 const GATE = 12;      // "Open and close the front door": the last step before real departures
 const GATE_DAYS = 2;  // calm reps there must come from at least this many different days
-function need(level){ return level <= 2 ? 2 : level <= 11 ? 3 : level === GATE ? 4 : level <= 21 ? 3 : level <= 25 ? 2 : 3; }
-function capFor(level){ return level <= 5 ? 3 : level <= 11 ? 2 : level <= 21 ? 1 : level <= 25 ? 2 : 1; }
+function need(level){ return level <= 2 ? 2 : level <= 11 ? 3 : level === GATE ? 4 : DUR[level] <= 60 ? 3 : DUR[level] <= 240 ? 2 : 3; }
+function capFor(level){ return level <= 5 ? 3 : level <= 11 ? 2 : DUR[level] <= 60 ? 1 : DUR[level] <= 240 ? 2 : 1; }
 // The stricter rules above apply from this day on. Reps logged before it are replayed under the rules she trained with,
 // so changing the rules never rewrites her history or moves her back.
 // From the front door on, a calm rep while she is asleep does not teach her about the cue. At least this many of the calm reps must be awake.
@@ -54,8 +60,8 @@ const GATE_DAY_REPS = 2;
 function gateDays(dayAw){ return Object.keys(dayAw).filter(d => dayAw[d] >= GATE_DAY_REPS).length; }
 function awakeNeed(n){ return Math.min(2, n - 1); }
 const RULES_V2_FROM = '2026-10-13';
-function needV1(level){ return level <= 2 ? 2 : level <= 12 ? 3 : level <= 25 ? 2 : 3; }
-function capV1(level){ return level <= 12 ? 3 : level <= 25 ? 2 : 1; }
+function needV1(level){ return level <= 2 ? 2 : level <= 12 ? 3 : (DUR[level] <= 240) ? 2 : 3; }
+function capV1(level){ return level <= 12 ? 3 : (DUR[level] <= 240) ? 2 : 1; }
 
 function sortedByDate(list){
   return list.slice().sort((a,b)=> (a.date < b.date ? -1 : a.date > b.date ? 1 : 0) || ((a.createdAt||0)-(b.createdAt||0)) || (a.id > b.id ? 1 : -1));
@@ -177,7 +183,7 @@ function pickNext(st, minutes, seed, opts){
   if(warm){
     // Warm-up: the first rep of a session is one or two steps easier, so she settles in before the real test.
     kind = 'warmup';
-    target = st.level === GATE ? 10 + Math.floor(rand01(seed + '|w') * 2) : Math.max(LAST_CUE, st.level - (1 + Math.floor(rand01(seed + '|w') * 2)));
+    target = st.level === GATE ? 10 + Math.floor(rand01(seed + '|w') * 2) : Math.max(LAST_CUE, st.level - (2 + Math.floor(rand01(seed + '|w') * 2)));
   }
   else if(st.level >= FIRST_OUT){
     const r = rand01(seed + '|a');
@@ -186,7 +192,7 @@ function pickNext(st, minutes, seed, opts){
     else if(r < 0.85) kind = 'easy';
     else kind = 'decoy';
     if(kind === 'easy'){
-      target = Math.max(FIRST_OUT, st.level - (1 + Math.floor(rand01(seed + '|b') * 3)));
+      target = Math.max(FIRST_OUT, st.level - (1 + Math.floor(rand01(seed + '|b') * 5)));
       if(st.level === FIRST_OUT){ target = LAST_CUE; kind = 'decoy'; }
     } else if(kind === 'decoy'){ target = LAST_CUE; }
   }
@@ -292,8 +298,11 @@ function coachMsg(ev, st){
 // Turn a stored entry into what the logic expects. Steps are stored by name; old rows only have a number.
 function normalizeEntry(e){
   if(e.kind === 'dep'){
-    const s = indexOfId(e.stepId); if(s >= 0) e.step = s;
-    const l = indexOfId(e.levelId); if(l >= 0) e.level = l;
+    const s = indexOfId(e.stepId); if(s >= 0) e.step = s; else if(e.step != null) e.step = fromOldIndex(e.step);
+    const l = indexOfId(e.levelId); if(l >= 0) e.level = l; else if(e.level != null) e.level = fromOldIndex(e.level);
+  } else if(e.kind === 'baseline'){
+    const l = indexOfId(e.levelId); if(l >= 0) e.level = l; else if(e.level != null) e.level = fromOldIndex(e.level);
+    const f = indexOfId(e.fromId); if(f >= 0) e.from = f; else if(e.from != null) e.from = fromOldIndex(e.from);
   }
   return e;
 }
@@ -464,4 +473,4 @@ function buildSummary(entries, days, date, place){
   return L.join('\n');
 }
 
-if(typeof module !== 'undefined') module.exports = { DUR, TOP, FIRST_OUT, LAST_CUE, QUICK_CEILING, isQuick, STEP_NAMES, CUE_IDS, idOf, indexOfId, stepLabel, stepTag, stepEst, gapSec, fits, need, capFor, sortedByDate, computeState, depsFor, stateFrom, baselineFor, startFor, skippedRanges, barInfo, levelsAfter, rand01, pickNext, ceilingFor, cooldownMs, waitUntil, coachMsg, normalizeEntry, buildSummary, fmtSec, sessionCount, isTiny, restSec, SESSION_MIN, SESSION_MAX, sessionSizeFor, breakMinFor, isSessionStart, RULES_V2_FROM, GATE, GATE_DAYS, GATE_DAY_REPS, dateAdd, helpAlerts, windowStats, weekCompare, progressSeries };
+if(typeof module !== 'undefined') module.exports = { MILESTONES, DUR, TOP, FIRST_OUT, LAST_CUE, QUICK_CEILING, isQuick, STEP_NAMES, CUE_IDS, idOf, indexOfId, stepLabel, stepTag, stepEst, gapSec, fits, need, capFor, sortedByDate, computeState, depsFor, stateFrom, baselineFor, startFor, skippedRanges, barInfo, levelsAfter, rand01, pickNext, ceilingFor, cooldownMs, waitUntil, coachMsg, normalizeEntry, buildSummary, fmtSec, sessionCount, isTiny, restSec, SESSION_MIN, SESSION_MAX, sessionSizeFor, breakMinFor, isSessionStart, RULES_V2_FROM, GATE, GATE_DAYS, GATE_DAY_REPS, dateAdd, helpAlerts, windowStats, weekCompare, progressSeries };

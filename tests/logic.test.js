@@ -31,7 +31,7 @@ let w=L.waitUntil([rep(0,'calm')]); assert.strictEqual(w.until-w.until+120000,12
 let a=rep(0,'calm'); { const g=L.waitUntil([a]).until-a.createdAt; assert(g>=120000&&g<=180000,'rest 1 to 1.5x the base: '+g); }
 a=rep(0,'mild'); { const g=L.waitUntil([a]).until-a.createdAt; assert(g>=240000&&g<=360000,'wobble doubles: '+g); }
 // tiny exposures: bigger sessions, shorter rests
-assert(L.isTiny(12)&&L.isTiny(15)&&!L.isTiny(11)&&!L.isTiny(16));
+assert(L.isTiny(12)&&L.isTiny(17)&&!L.isTiny(11)&&!L.isTiny(18));
 { const sizes=new Set(); for(let k=0;k<300;k++){ const z=L.sessionSizeFor(1e12+k*60000,true); assert(z>=5&&z<=8); sizes.add(z); } assert.strictEqual(sizes.size,4); }
 assert(L.restSec(13,1e12)>=90&&L.restSec(13,1e12)<=135);
 // rests grow with the time out and vary, never below the old fixed gap
@@ -159,8 +159,8 @@ console.log('logic tests (new place) ok');
   let i4=0,t4=Date.parse('2026-11-12T09:00:00Z');
   const G=(step,outcome,date)=>({id:'g'+(i4++),kind:'dep',place:'home',date,step,outcome,createdAt:(t4+=60000)});
   assert.strictEqual(L.need(12),4); assert.strictEqual(L.GATE,12);
-  assert.strictEqual(L.capFor(3),3); assert.strictEqual(L.capFor(8),2); assert.strictEqual(L.capFor(12),1); assert.strictEqual(L.capFor(21),1); assert.strictEqual(L.capFor(22),2);
-  assert.strictEqual(L.need(15),3); assert.strictEqual(L.need(23),2);
+  assert.strictEqual(L.capFor(3),3); assert.strictEqual(L.capFor(8),2); assert.strictEqual(L.capFor(12),1); assert.strictEqual(L.capFor(L.DUR.indexOf(60)),1); assert.strictEqual(L.capFor(L.DUR.indexOf(90)),2); assert.strictEqual(L.capFor(L.DUR.indexOf(300)),1);
+  assert.strictEqual(L.need(15),3); assert.strictEqual(L.need(L.DUR.indexOf(120)),2); assert.strictEqual(L.need(L.DUR.indexOf(60)),3); assert.strictEqual(L.need(L.DUR.indexOf(300)),3);
   { const A=(step,date,asleep)=>Object.assign(G(step,'calm',date),{tags:asleep?['Asleep before']:[]});
     const D1='2026-11-12', D2='2026-11-13';
     // each of two days needs at least 2 awake calm reps
@@ -228,3 +228,19 @@ console.log('logic tests (gate, caps, warm-up) ok');
   const g4=L.computeState(hist.concat([H(12,'calm','2026-10-12')]).concat(tomorrow.slice(0,2)),6); assert.strictEqual(g4.level,13,'2 awake calm reps on each of two days moves her');
 }
 console.log('logic tests (grandfathering) ok');
+// ---- finer ladder: history stays valid ----
+{
+  const D=L.DUR;
+  for(let i=14;i<=L.TOP;i++){ assert(D[i]>D[i-1],'ascending'); assert(D[i]/D[i-1]<=1.5,'jump at '+i+': '+D[i-1]+' to '+D[i]); }
+  assert.strictEqual(D[L.TOP],14400); assert.strictEqual(L.TOP+1,52);
+  // saved reps carry a step name, so they land on the same duration whatever the numbers are
+  ['out.2','out.4','out.7','out.60','out.1800','out.14400'].forEach(id=>assert.strictEqual('out.'+D[L.indexOfId(id)],id));
+  // old saved numbers with no step name map by duration (old index 15 was 7 s, old 21 was 60 s)
+  const old=L.normalizeEntry({kind:'dep',step:15,level:21}); assert.strictEqual(D[old.step],7); assert.strictEqual(D[old.level],60);
+  const bl=L.normalizeEntry({kind:'baseline',level:26,from:13}); assert.strictEqual(D[bl.level],300); assert.strictEqual(bl.from,13);
+  // cue steps never move
+  assert.strictEqual(L.indexOfId('door.open'),12); assert.strictEqual(L.indexOfId('out.2'),13);
+  // milestones sit on the same times as before
+  assert.strictEqual(D[Number(Object.keys(L.MILESTONES).find(k=>L.MILESTONES[k]==='bins out'))],60);
+  console.log('logic tests (finer ladder) ok');
+}

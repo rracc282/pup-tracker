@@ -306,25 +306,32 @@
     <div class="pos-note" id="posNote" hidden></div>
   </section>
 
-  <section class="card" id="progCard" hidden></section>
-
-  <section class="card" id="pocketCard">
-    <div id="pocketBlock" hidden>
+  <section class="card" id="pocketCard" hidden>
+    <div id="pocketBlock">
       <span class="label">How long do you have?</span>
       <div class="chips" id="pocketChips" role="group" aria-label="Time available"></div>
-      <div class="hint" style="margin:6px 0 12px">Her steps are getting longer, so this now decides which rep you get.</div>
+      <div class="hint" style="margin:6px 0 0">Her steps are getting longer, so this now decides which rep you get.</div>
     </div>
-    <span class="label">Where is she?</span>
-    <div class="chips" id="spotChips" role="group" aria-label="Her spot"></div>
   </section>
 
   <section class="card hero" id="repCard" aria-live="polite"></section>
 
-  <section class="card" id="todayCard"></section>
+  <button class="btn primary" data-action="eod" id="eodBtn">End of day summary</button>
 
-  <details class="card" id="logCard">
-    <summary>Log</summary>
-    <div id="logList"></div>
+  <details class="card" id="dayCard">
+    <summary>Today and progress</summary>
+    <div class="stack">
+      <div id="progCard" hidden></div>
+      <div id="spotBlock">
+        <span class="label">Where is she?</span>
+        <div class="chips" id="spotChips" role="group" aria-label="Her spot"></div>
+      </div>
+      <div id="todayCard"></div>
+      <details id="logCard">
+        <summary>Log</summary>
+        <div id="logList"></div>
+      </details>
+    </div>
   </details>
 
   <details class="card" id="moreCard">
@@ -346,12 +353,12 @@
         <li>The app works out the next rep and the wait before it.</li>
       </ul>
 
-      <h3>The ladder: 38 steps</h3>
+      <h3>The ladder: 52 steps</h3>
       <ul>
         <li><b>Steps 1 to 6:</b> departure cues with her watching (coat, shoes, bag, keys, bolt, then all together). The aim is for the cues to become boring.</li>
         <li><b>Steps 7 to 12:</b> the same cues with her behind the closed door, so she only hears them.</li>
         <li><b>Step 13:</b> opening and closing the front door without leaving.</li>
-        <li><b>Steps 14 to 38:</b> time outside, from 2 seconds up to 4 hours. Tap the progress card at the top to see every step.</li>
+        <li><b>Steps 14 to 52:</b> time outside, from 2 seconds up to 4 hours. Tap the progress card at the top to see every step.</li>
       </ul>
 
       <h3>Moving up, repeating, dropping back</h3>
@@ -411,9 +418,9 @@
 <dialog id="stepsSheet"><div class="stack" id="stepsBody"></div></dialog>
 <dialog id="eodSheet"><div class="stack" id="eodBody"></div></dialog>
 
-<script src="config.js?v=37"></script>
-<script src="supabase.js?v=37"></script>
-<script src="logic.js?v=37"></script>
-<script src="app.js?v=37"></script>
+<script src="config.js?v=38"></script>
+<script src="supabase.js?v=38"></script>
+<script src="logic.js?v=38"></script>
+<script src="app.js?v=38"></script>
 </body>
 </html>

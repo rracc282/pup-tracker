@@ -1,6 +1,6 @@
 // Churro tracker app. Uses logic.js (pure) and Supabase (sync + push queue).
 'use strict';
-const APP_VERSION = '37';
+const APP_VERSION = '38';
 const CFG = window.PT_CONFIG || {};
 const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -29,7 +29,7 @@ const PLACE_NAME = { home:'Home', zurich:'Zurich', other:'Elsewhere' };
 const OUT_NAME = { calm:'Calm', mild:'Wobble', escalated:'Upset' };
 const POCKET_TAGS = ['Coffee','Shower','Bins','Cooking','Call','Evening','Other'];
 const TAG_GROUPS = [
-  ['Before I left', ['Awake before','Dozing before','Asleep before','@walked','Chew given']],
+  ['Before I left', ['Awake before','Asleep before','@walked','Chew given']],
   ['Her first reaction', ['Head up','Stood up','Followed me','Went to the door']],
   ['How quickly she settled', ['Settled under 10 s','Settled under 1 min','Took over 1 min','Never settled']],
   ['Body signs', ['Panting','Pacing','Trembling','Lip licking','Yawning']],
@@ -38,7 +38,7 @@ const TAG_GROUPS = [
   ['When I came back', ['Calm greeting','Excited','Clingy','Ignored me']],
   ['Context', ['Outside noise','Visitor']]
 ];
-const PRE_STATES = [['Awake before','Awake'],['Dozing before','Dozing'],['Asleep before','Asleep']];
+const PRE_STATES = [['Awake before','Awake'],['Asleep before','Asleep']];
 const TAG_LABEL = { 'Dozing before':'Dozing', 'Asleep before':'Asleep', 'Awake before':'Awake', 'Settled under 10 s':'Under 10 s', 'Settled under 1 min':'Under 1 min', 'Took over 1 min':'Over 1 min', '@walked':'Walked first' };
 const REACTION_TAGS_OLD = ['Asleep before','Awake before','Head up','Stood up','Followed me','Went to the door','Vocalised','Settled under 10 s','Settled under 1 min','Took over 1 min','Outside noise'];
 const SPOTS = ['Sofa','Bed','Crate','Floor'];
@@ -70,6 +70,7 @@ function rowOf(e){
   const data = Object.assign({}, e);
   delete data.id; delete data.date; delete data.kind; delete data.createdAt;
   if(e.kind === 'dep'){ data.stepId = idOf(e.step); if(e.level != null) data.levelId = idOf(e.level); }
+  if(e.kind === 'baseline'){ if(e.level != null) data.levelId = idOf(e.level); if(e.from != null) data.fromId = idOf(e.from); }
   return { id: e.id, user_id: session.user.id, date: e.date, kind: e.kind, created_at: new Date(e.createdAt).toISOString(), data, updated_at: new Date().toISOString() };
 }
 function rebuild(){ entries = sortedByDate(Array.from(repMap.values())); }
@@ -344,7 +345,7 @@ function ladderEntries(){ return liveEntries(); }  // depsFor() further drops me
 // ---------- rendering ----------
 function renderPlace(){ /* place is chosen in the day sheet now */ }
 function renderPocket(){
-  $('pocketBlock').hidden = !pocketMatters(stateFrom(ladderEntries(), place));
+  $('pocketCard').hidden = !pocketMatters(stateFrom(ladderEntries(), place));
   $('pocketChips').innerHTML = POCKETS.map(([m,l]) => `<button class="chip" data-pocket="${m}" aria-pressed="${pocket===m}" ${ui.mode!=='idle'?'disabled':''}>${l}</button>`).join('');
   $('spotChips').innerHTML = SPOTS.map(s => `<button class="chip" data-spot="${s}" aria-pressed="${spot===s}">${s}</button>`).join('');
 }
@@ -358,7 +359,7 @@ function renderPos(){
   renderProgressBox();
   const st = stateFrom(ladderEntries(), place);
   $('posNow').textContent = stepLabel(st.level);
-  $('posStep').textContent = 'Step ' + (st.level+1) + ' of ' + (TOP+1) + ' · goal 4 h';
+  $('posStep').textContent = 'Step ' + (st.level+1) + ' of ' + (TOP+1) + ' · ' + st.run + ' of ' + st.need + ' calm' + (st.gate ? ' · ' + st.runDays + ' of 2 days' : '') + ' · goal 4 h';
   const pct = v => (v / TOP * 100) + '%';
   const info = barInfo(ladderEntries(), place);
   let clip = `<div id="posFill" style="width:${pct(st.level)}"></div>`;
@@ -438,10 +439,14 @@ function instructionsFor(step){
     'Churro in the living room, door closed. You are in the hallway.',
     'Coat on, shoes on, bag up, keys up, then unlock and open the front door and close it again. You stay inside.',
     'Everything off, go in calmly. This rep is about her reaction, not about time. Calm means she is back to resting within about 10 seconds of each cue.'];
+  if(DUR[step] <= 10) return [
+    'Churro settled in the living room, door closed.',
+    'Step out, close the door, and come back calmly after ' + fmtSec(DUR[step]) + '. No timer needed.',
+    'No greeting. Tap when you are back in.'];
   return [
-    'Churro in the living room, door closed. Best after a walk, relaxed. If your partner is home you both leave. If one of you stays, she is not alone and it does not count.',
-    'Step out, close the door, tap the button, wait out the time.',
-    'Come back calmly with no greeting. End early at the first sign it is building.'];
+    'Churro settled in the living room, door closed. Best after a walk.',
+    'Step out, close the door, tap the button, wait for the beep.',
+    'Come back calmly with no greeting. End early if it is building.'];
 }
 
 const CUE_NAME = ['Coat','Shoes','Bag','Keys','Bolt','All five cues','Coat','Shoes','Bag','Keys','Bolt','All five cues','Front door'];
@@ -559,11 +564,11 @@ function renderRep(){
     const st = stateFrom(live, place);
     const nx = pickNext(st, effPocket(st), place + '|' + depsFor(live, place).length + '|' + st.level, { sessionStart: isSessionStart(liveEntries(), Date.now()) });
     let sub;
-    if(nx.kind === 'warmup') sub = 'Warm-up to start the session. It does not count toward moving up, and your step has not changed. Your working step is still ' + stepLabel(st.level) + '.';
-    else if(nx.fitted) sub = 'A shorter practice rep that fits your time. Your working step is ' + stepLabel(st.level) + '.';
-    else if(nx.kind === 'decoy') sub = 'No leaving this time. These keep the cues from always meaning you are going.';
-    else if(nx.afterWobble) sub = 'Easier on purpose after the wobble. Your working step is ' + stepLabel(st.level) + '.';
-    else if(nx.easy) sub = 'Shorter or easier on purpose, to keep her confident. Your working step is ' + stepLabel(st.level) + '.';
+    if(nx.kind === 'warmup') sub = 'Warm-up. It does not count toward moving up, and your step has not changed.';
+    else if(nx.fitted) sub = 'A shorter rep that fits your time.';
+    else if(nx.kind === 'decoy') sub = 'No leaving this time.';
+    else if(nx.afterWobble) sub = 'Easier on purpose after the wobble.';
+    else if(nx.easy) sub = 'Shorter on purpose, to keep her confident.';
     else sub = 'Working step · ' + st.run + ' of ' + st.need + ' calm in a row' + (st.gate ? ', on ' + st.runDays + ' of 2 days needed' : '') + '.';
     const capLeft = Math.max(1, catLimit(nx.step) - catCount(nx.step));
     const fitN = pocketMatters(st) ? Math.min(SESSION_MAX, capLeft, Math.max(1, Math.floor(pocket * 60 / (stepEst(nx.step) + gapSec(nx.step))))) : 1;
@@ -596,18 +601,19 @@ function renderRep(){
     return;
   }
   if(ui.mode === 'run'){
-    const timed = r.kind === 'dep' && r.step >= FIRST_OUT;
+    const timed = r.kind === 'dep' && r.step >= FIRST_OUT && !r.untimed;
     const reaction = r.kind === 'dep' && r.step < FIRST_OUT;
     const idleNote = r.kind === 'rest' ? 'Door closed. Do your thing, then open it calmly.'
+      : r.untimed ? 'No timer needed. Step out, close the door, come back calmly, then tap.'
       : r.step <= 5 ? 'No timer on this one. Do the cue, watch her, then tap Done.'
       : 'No timer on this one. Do the cues, watch Furbo, then go in and tap Done.';
     el.innerHTML = `<div class="eyebrow">${esc(label)}</div>
-      ${reaction ? '<div class="rep-label">Watch her reaction</div>' : '<div class="clock" id="tClock">0:00</div>'}
+      ${reaction ? '<div class="rep-label">Watch her reaction</div>' : r.untimed ? `<div class="rep-label">Out for ${esc(fmtSec(DUR[r.step]))}</div>` : '<div class="clock" id="tClock">0:00</div>'}
       ${timed ? '<div class="tbar"><div id="tFill"></div></div>' : ''}
       <div class="tnote${timed && r.alerted ? ' alert' : ''}" id="tNote">${timed ? (r.alerted ? 'Time is up. Go back in calmly.' : 'Stay out until the beep.') : idleNote}</div>
-      <button class="btn primary" data-action="back">${timed ? 'I am back' : 'Done'}</button>
+      <button class="btn primary" data-action="back">${timed || r.untimed ? 'I am back' : 'Done'}</button>
       ${timed && DUR[r.step] <= 300 ? `<button class="btn" data-action="skiptimer">Watching the camera? Skip the timer and log ${esc(fmtSec(DUR[r.step]))}</button>` : ''}
-      ${timed ? '<button class="btn danger" data-action="early">Back early. She is escalating</button>' : ''}`;
+      ${timed || r.untimed ? '<button class="btn danger" data-action="early">Back early. She is escalating</button>' : ''}`;
     tick();
     return;
   }
@@ -644,7 +650,7 @@ function renderToday(){
     </div>
     <div class="hint" style="margin-bottom:8px">Rest block: she is in the living room, door closed, while you cook, shower or take a call. Tap Done when you open it.</div>
     <button class="btn" data-action="startrest" ${ui.mode!=='idle'?'disabled':''}>Busy at home? Start a rest block</button>
-    <button class="btn primary" data-action="eod">End of day summary</button>`;
+`;
 }
 
 function describeEntry(e){
@@ -764,7 +770,6 @@ function renderMore(){
   $('moreList').innerHTML =
     moreSec('week', 'This week vs last week', weekHtml()) +
     moreSec('alone', 'Real alone time', alone, !!a) +
-    moreSec('pace', 'Pacing options', pace) +
     moreSec('step', 'Set my step', step) +
     moreSec('claude', 'Claude link', `<div class="hint">Optional. Paste the web address of your Churro project from your Claude account (open the project, copy the address). "Request feedback" will open it. Leave empty to open a new chat.</div><input class="txt" id="claudeUrl" type="url" placeholder="https://claude.ai/project/..." value="${esc(lsGet('pt-claude-url') || '')}"><button class="btn sm" data-action="saveclaudeurl">Save link</button>`) +
     moreSec('notif', 'Notifications', notif) +
@@ -906,7 +911,8 @@ function startRep(step){
   qCancelKind('ready');
   const rep = { kind:'dep', step, place, startedAt:null, alerted:false, pre: ui.pre || null };
   ui.pre = null;
-  if(step >= FIRST_OUT){ ui.mode = 'prep'; ui.rep = rep; }
+  if(step >= FIRST_OUT && DUR[step] > 10){ ui.mode = 'prep'; ui.rep = rep; }
+  else if(step >= FIRST_OUT){ rep.untimed = true; rep.startedAt = Date.now(); ui.mode = 'run'; ui.rep = rep; scheduleForgot(rep, 60); }
   else { rep.startedAt = Date.now(); ui.mode = 'run'; ui.rep = rep; primeAudio(); startTicking(); scheduleForgot(rep, 60); }
   saveActive(); render({ rep:true });
 }
@@ -931,6 +937,7 @@ function startRest(){
 function finishRun(early){
   const r = ui.rep; if(!r) return;
   r.actualSec = Math.round((Date.now() - r.startedAt) / 1000);
+  if(r.untimed && !early){ r.actualSec = DUR[r.step]; r.byPlan = true; }
   stopTicking();
   if(early){ r.early = true; saveRep('escalated'); return; }
   qCancelId(r.queueId);
