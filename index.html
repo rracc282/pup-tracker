@@ -88,7 +88,7 @@
     padding-inline:16px;
     padding-block:20px 72px;
   }
-  .wrap{max-width:560px;margin:0 auto;display:flex;flex-direction:column;gap:14px;}
+  .wrap{max-width:560px;margin:0 auto;display:flex;flex-direction:column;gap:10px;}
   button{font:inherit;color:inherit;cursor:pointer;}
   button:focus-visible,input:focus-visible{outline:3px solid var(--accent);outline-offset:2px;}
   .eyebrow{
@@ -216,10 +216,18 @@
 
   body{padding-block:calc(20px + env(safe-area-inset-top)) calc(72px + env(safe-area-inset-bottom));}
   .topbar{display:flex;justify-content:space-between;align-items:center;gap:10px;}
-  h1.topt{font-size:18px;margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  h1.topt{font-size:clamp(17px,5vw,19.5px);margin:0;white-space:nowrap;min-width:0;}
+  .daychip{min-height:36px;padding:6px 10px;display:inline-flex;align-items:center;gap:6px;flex-shrink:0;}
+  .daychip .sync{font-size:11px;font-family:var(--font-body,inherit);}
+  .daychip .sync::before{content:'';display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--calm);margin-right:4px;vertical-align:0;}
+  .daychip .sync.off::before{background:var(--wobble);}
+  #restBtn{min-height:42px;padding:9px 14px;}
   .tapbox{cursor:pointer;-webkit-tap-highlight-color:transparent;}
   .tapbox .more-hint{font-size:12.5px;color:var(--ink-2);margin:0 0 10px;display:flex;align-items:center;gap:4px;}
-  body{padding-block-start:calc(12px + env(safe-area-inset-top));}
+  body{padding-block:calc(8px + env(safe-area-inset-top)) calc(24px + env(safe-area-inset-bottom));}
+  .card{padding:14px;}
+  .hero{padding:14px;}
+  .where{gap:6px;}
   .daychip{min-height:40px;padding:8px 14px;border-radius:999px;border:1px solid var(--line);background:var(--surface);font-weight:600;font-size:14px;white-space:nowrap;}
   .daychip.med,.dayChip.med{border-color:var(--wobble);}
   .banner.ask{background:var(--accent-soft);border-color:var(--accent);}
@@ -293,11 +301,13 @@
 
 <main class="wrap" id="app" hidden>
   <header class="topbar">
-    <h1 class="topt">Alone-time training <span class="sync" id="syncDot"></span></h1>
-    <button class="dayChip daychip" id="dayChip" aria-label="Day type"></button>
+    <h1 class="topt">Alone-time training</h1>
+    <button class="dayChip daychip" id="dayChip" aria-label="Day type"><span id="dayChipTxt"></span><span class="sync" id="syncDot"></span></button>
   </header>
 
   <div id="dayBanner"></div>
+
+  <button class="btn" data-action="startrest" id="restBtn">Busy at home? Start a rest block</button>
 
   <section class="card where" id="posCard" aria-label="Where you are on the ladder" data-action="steps" role="button" tabindex="0" style="cursor:pointer">
     <div class="pos-row"><span class="pos-now" id="posNow"></span><span class="pos-step" id="posStep"></span></div>
@@ -396,9 +406,9 @@
 <dialog id="stepsSheet"><div class="stack" id="stepsBody"></div></dialog>
 <dialog id="eodSheet"><div class="stack" id="eodBody"></div></dialog>
 
-<script src="config.js?v=44"></script>
-<script src="supabase.js?v=44"></script>
-<script src="logic.js?v=44"></script>
-<script src="app.js?v=44"></script>
+<script src="config.js?v=45"></script>
+<script src="supabase.js?v=45"></script>
+<script src="logic.js?v=45"></script>
+<script src="app.js?v=45"></script>
 </body>
 </html>

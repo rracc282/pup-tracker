@@ -1,6 +1,6 @@
 // Churro tracker app. Uses logic.js (pure) and Supabase (sync + push queue).
 'use strict';
-const APP_VERSION = '44';
+const APP_VERSION = '45';
 const CFG = window.PT_CONFIG || {};
 const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -93,7 +93,8 @@ function setSync(){
   const el = $('syncDot'); if(!el) return;
   const n = outbox.length;
   el.className = 'sync' + ((!online || n) ? ' off' : '');
-  el.textContent = !sb ? '· not configured' : !online ? '· offline' : n ? '· saving ' + n : '· synced';
+  el.textContent = !sb ? 'not configured' : !online ? 'offline' : n ? 'saving ' + n : '';
+  el.title = !sb ? 'Not configured' : !online ? 'Offline' : n ? 'Saving ' + n : 'Synced';
 }
 async function flushOutbox(){
   if(!sb || !session || !online || !outbox.length) return;
@@ -257,7 +258,7 @@ function dayChipHtml(){
 }
 function renderDay(){
   const chip = $('dayChip');
-  chip.textContent = dayChipHtml();
+  $('dayChipTxt').textContent = dayChipHtml();
   chip.classList.toggle('med', isMedicated());
   const b = $('dayBanner');
   if(!dayType()) b.innerHTML = `<div class="banner ask">What kind of day is it, and where will you be? <button class="inl" data-action="daysheet">Pick today</button> It sets today's limits.</div>`;
@@ -371,7 +372,7 @@ function renderPos(){
   let nextM = null;
   for(let k = st.level + 1; k <= TOP; k++){ if(MILESTONES[k]){ nextM = k; break; } }
   $('posNext').textContent = nextM != null
-    ? 'Next milestone: ' + fmtSec(DUR[nextM]) + ' (' + MILESTONES[nextM] + '), ' + (nextM - st.level) + ' step' + (nextM - st.level === 1 ? '' : 's') + ' away.'
+    ? 'Next: ' + fmtSec(DUR[nextM]) + ' (' + MILESTONES[nextM] + ') · ' + (nextM - st.level) + ' step' + (nextM - st.level === 1 ? '' : 's') + ' away'
     : 'You are at the top of the ladder.';
   const legend = [];
   if(info.skipped.length) legend.push('Orange: steps you set by hand, not earned by reps.');
@@ -643,6 +644,7 @@ function renderToday(){
   const cueN = deps.filter(e => isQuick(e.step)).length;
   const outN = deps.length - cueN;
   const rests = liveEntries().filter(e => e.kind === 'rest' && e.date === t).length;
+  $('restBtn').disabled = ui.mode !== 'idle';
   $('todayCard').innerHTML = `<h2>Today</h2>
     <div class="stats">
       <span>Quick reps <b>${cueN}</b> of ${QUICK_CEILING}</span>
@@ -650,7 +652,6 @@ function renderToday(){
       <span>Calm <b>${c}</b></span><span>Wobble <b>${w}</b></span><span>Upset <b>${u}</b></span>
       <span>Rest blocks <b>${rests}</b></span>
     </div>
-    <button class="btn" data-action="startrest" ${ui.mode!=='idle'?'disabled':''}>Busy at home? Start a rest block</button>
 `;
 }
 
