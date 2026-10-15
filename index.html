@@ -122,7 +122,7 @@
 
   /* rep card */
   .hero{padding:18px 16px 16px;}
-  .rep-label{font-family:var(--font-display);font-weight:700;font-size:32px;line-height:1.05;margin:2px 0 6px;text-wrap:balance;}
+  .rep-label{font-family:var(--font-display);font-weight:700;font-size:27px;line-height:1.05;margin:2px 0 6px;text-wrap:balance;}
   .rep-sub{color:var(--ink-2);font-size:14px;margin-bottom:12px;}
   .steps{margin:0 0 14px;padding:0;list-style:none;display:flex;flex-direction:column;gap:6px;font-size:14.5px;}
   .steps li{padding-left:18px;position:relative;}
@@ -215,7 +215,11 @@
   @media (prefers-reduced-motion: reduce){ .bar > div{transition:none;} }
 
   body{padding-block:calc(20px + env(safe-area-inset-top)) calc(72px + env(safe-area-inset-bottom));}
-  .topbar{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;}
+  .topbar{display:flex;justify-content:space-between;align-items:center;gap:10px;}
+  h1.topt{font-size:18px;margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .tapbox{cursor:pointer;-webkit-tap-highlight-color:transparent;}
+  .tapbox .more-hint{font-size:12.5px;color:var(--ink-2);margin:0 0 10px;display:flex;align-items:center;gap:4px;}
+  body{padding-block-start:calc(12px + env(safe-area-inset-top));}
   .daychip{min-height:40px;padding:8px 14px;border-radius:999px;border:1px solid var(--line);background:var(--surface);font-weight:600;font-size:14px;white-space:nowrap;}
   .daychip.med,.dayChip.med{border-color:var(--wobble);}
   .banner.ask{background:var(--accent-soft);border-color:var(--accent);}
@@ -289,10 +293,7 @@
 
 <main class="wrap" id="app" hidden>
   <header class="topbar">
-    <div>
-      <div class="eyebrow">Churro <span class="sync" id="syncDot"></span></div>
-      <h1>Alone-time training</h1>
-    </div>
+    <h1 class="topt">Alone-time training <span class="sync" id="syncDot"></span></h1>
     <button class="dayChip daychip" id="dayChip" aria-label="Day type"></button>
   </header>
 
@@ -316,8 +317,6 @@
 
   <section class="card hero" id="repCard" aria-live="polite"></section>
 
-  <button class="btn primary" data-action="eod" id="eodBtn">End of day summary</button>
-
   <details class="card" id="dayCard">
     <summary>Today and progress</summary>
     <div class="stack">
@@ -327,8 +326,11 @@
         <summary>Log</summary>
         <div id="logList"></div>
       </details>
+
     </div>
   </details>
+
+  <button class="btn primary" data-action="eod" id="eodBtn">End of day summary</button>
 
   <details class="card" id="moreCard">
     <summary>More</summary>
@@ -338,73 +340,53 @@
   <details class="card">
     <summary>How it works</summary>
     <div class="howto">
-      <h3>The goal</h3>
-      <p>Teach Churro, in small calm steps, that being alone is safe, until she can manage up to 4 hours. Progress only counts when she stays relaxed. Going slowly is the method, so the app never pushes past what she has shown she can do.</p>
+      <h3>The idea</h3>
+      <p>Teach Churro, in small calm steps, that being alone is safe, up to 4 hours. Only calm reps count, and the app never pushes past what she has shown.</p>
 
-      <h3>One rep, start to finish</h3>
+      <h3>One rep</h3>
       <ul>
-        <li>Tell the app how much time you have if it asks, then start the rep it suggests.</li>
-        <li>Do the rep: a cue practice, or leave for the time shown. Come back calmly with no big hello.</li>
-        <li>Tap how she did: <b>Calm</b>, <b>Wobble</b> (mild stress) or <b>Upset</b>. Add a note if useful. Notes and tags help whoever is helping you read the day.</li>
-        <li>The app works out the next rep and the wait before it.</li>
+        <li>Start the rep the app suggests (tap the box to see how to do it). Come back calmly, no big hello. Up to 10 seconds there is no timer. Longer reps have a timer, or tap "Skip the timer" if you are watching the camera.</li>
+        <li>Tap how she did: <b>Calm</b>, <b>Wobble</b> (mild stress) or <b>Upset</b>. Then say if she was awake or asleep, and add a note if useful.</li>
+        <li>The app works out the next rep and the wait.</li>
       </ul>
 
       <h3>The ladder: 52 steps</h3>
       <ul>
-        <li><b>Steps 1 to 6:</b> departure cues with her watching (coat, shoes, bag, keys, bolt, then all together). The aim is for the cues to become boring.</li>
-        <li><b>Steps 7 to 12:</b> the same cues with her behind the closed door, so she only hears them.</li>
-        <li><b>Step 13:</b> opening and closing the front door without leaving.</li>
-        <li><b>Steps 14 to 52:</b> time outside, from 2 seconds up to 4 hours. Tap the progress card at the top to see every step.</li>
+        <li>1 to 6: cues while she watches. 7 to 12: the same cues behind the closed door. 13: open and close the front door. 14 to 52: time outside, from 2 seconds to 4 hours. Tap the top card to see every step.</li>
       </ul>
 
-      <h3>Moving up, repeating, dropping back</h3>
+      <h3>Moving up</h3>
       <ul>
-        <li><b>Calm</b> counts toward moving up: 2 calm reps in a row for coat, shoes and bag, 3 for the other cues, <b>4 for the front door step, with at least 2 calm reps while she is awake or dozing on each of 2 different days</b>, then 3 for each of the first short departures (up to 1 minute) and 2 for the next ones. Step-ups are limited per day: 3 on the first cues, 2 behind the door, 1 on the front door, 2 for the first departures up to 10 seconds, then 1 up to 1 minute. After any wobble or upset, no step-ups until the next day. These stricter rules apply from 13 October; earlier reps keep the rules she trained under.</li>
-        <li><b>Asleep reps:</b> from the front door step on, after the front door, at least 2 of the calm reps needed to move up must be with her awake or dozing, because a sleeping dog may not notice the cue. Asleep reps still count as calm and never set her back. Tag them with “Asleep before”.</li>
-        <li><b>Gentle limits:</b> choose “Rest day” in the day type for a day with no training. After 20:30, and once two sessions are done from the front door step up, the app shows a wind-down card instead of the next rep. Tap “Keep training” to carry on. Both can be turned off in More. The rest between reps grows with the time outside and varies a little each time.</li>
-        <li><b>Wobble</b> repeats the step and makes the next rep easier. A second wobble in a row drops her one step, or two if the wobbles were on easier steps than her working step. After any wobble the next rep is never harder than the step that wobbled.</li>
-        <li><b>Upset</b> drops her two steps and pauses training for 3 hours. A rough day is information, not failure.</li>
-        <li>Only reps at her working step can move her up, and no rep is ever harder than that step.</li>
-        <li><b>Warm-up:</b> from the front door step on, each session (after a break of 45 minutes or more) starts with one or two easier reps that do not count toward moving up. You get two when yesterday had a wobble or upset, when you have been away from training for 3 days or more, or when you are one calm rep from moving up. While her step is only a few seconds, a warm-up may be just opening and closing the door.</li>
+        <li><b>Calm reps in a row</b> at the working step: 2 for coat, shoes and bag, 3 for the other cues, 4 for the front door, 3 for departures up to 1 minute, 2 up to 4 minutes, 3 beyond.</li>
+        <li><b>Front door:</b> the calm reps must come from 2 different days, with at least 2 awake or dozing on each. <b>Above it:</b> at least 2 of the calm reps (1 when only 2 are needed) with her awake or dozing, because a sleeping dog may not notice the cue.</li>
+        <li><b>Step-ups per day:</b> 3 on the first cues, 2 behind the door, 1 on the front door, 2 for departures up to 10 seconds, then 1 up to 1 minute, 2 up to 4 minutes and 1 beyond. After any wobble or upset, no step-ups until the next day.</li>
+        <li>These rules apply from 13 October. Earlier reps keep the rules she trained under.</li>
+      </ul>
+
+      <h3>When it goes wrong</h3>
+      <ul>
+        <li><b>Wobble:</b> the count of calm reps restarts, the next rep is easier and the rest is doubled. A second wobble in a row drops her one or two steps.</li>
+        <li><b>Upset:</b> drops her two steps and pauses training for 3 hours. A rough day is information, not failure.</li>
       </ul>
 
       <h3>Why reps vary</h3>
-      <p>About 60% of reps are at her working step and about 40% are shorter on purpose, so the cues never reliably mean "she is leaving". A shorter rep is always a real, shorter departure, from about a tenth to three quarters of her working step (at 2 seconds there is nothing shorter, so those reps stay at 2 seconds). A rep that does not count (a warm-up or a shorter rep) is always followed by a working-step rep, so she never gets stuck on easy ones. Session size (3 to 6 reps, or 5 to 8 for the front door and the first departures up to 7 seconds, with shorter rests between them) and the break after it (45 to 90 minutes) also vary, so the day has no fixed script.</p>
-
-      <h3>Pacing and limits</h3>
       <ul>
-        <li>The wait after a rep is 2 minutes for quick calm reps, doubled after a wobble, and longer after longer steps. "Skip the wait" exists, but a shorter recovery makes wobbles more likely.</li>
-        <li>Daily limits: 15 quick reps (cues and steps up to 1 minute), plus 10 longer reps on home days (including Wednesdays), 8 on weekends and 5 on sitter days. There are also limits on step-ups per day.</li>
-        <li>The break between sessions is rest, not training. She can be with you, and you should not leave her alone by accident.</li>
+        <li>About 60% of reps are at her working step and 40% are shorter real departures (roughly a tenth to three quarters of it), so the cues never reliably mean "she is leaving". At 2 seconds there is nothing shorter. A rep that does not count is always followed by a working-step rep.</li>
+        <li><b>Warm-ups:</b> each session starts with one or two easier reps that do not count. You get two after a wobble or upset the last training day, after 3 or more days away, or when you are one calm rep from moving up. While her step is only a few seconds, a warm-up may just be opening and closing the door.</li>
+        <li>Rests between reps grow with the time outside and vary at random. Sessions are 3 to 6 reps (5 to 8 up to 7 seconds), then a break of 45 to 90 minutes.</li>
       </ul>
 
-      <h3>What does and does not move the ladder</h3>
+      <h3>Limits and days</h3>
       <ul>
-        <li><b>Moves it:</b> training reps (cue practice and time outside) done alone, logged on a normal day.</li>
-        <li><b>Logged, but never moves it:</b> rest blocks (she is behind a closed door while you are home), real alone time (a sitter cancelled, an errand), reps on a medicated day, and reps you void.</li>
-        <li><b>Partner home:</b> you both leave together. If one of you stays, she is not alone and it does not count. Tick "Both of us" in the note.</li>
-        <li><b>Real absences:</b> keep them within her current step. Anything longer, take her with you or use a sitter.</li>
+        <li>Each day: 15 quick reps (cues and steps up to 1 minute) plus 10 longer reps on home days, 8 on weekends and 5 on sitter days. After 20:30 or a second session, a wind-down card appears (tap "Keep training" to carry on). "Rest day" and "End of day summary" stop the day's training.</li>
+        <li>Every morning, pick the day type and where you are. Each place has its own ladder. "Set my step" in More moves her by hand.</li>
+        <li><b>Never moves the ladder:</b> rest blocks, real alone time, medicated days, voided reps, and reps with your partner staying home.</li>
       </ul>
-
-      <h3>Days and places</h3>
-      <ul>
-        <li>Every morning the app asks what kind of day it is (home, weekend or sitter) and where you will be. That sets the day's limits.</li>
-        <li>Each place has its own ladder. A new place starts from the first step, because what she learned at home does not automatically carry over.</li>
-        <li><b>Set my step</b> (in More) lets you jump to a step by hand. The skipped steps show in orange on the bar, a manual step back shows in dark green, and a red tick marks where she had to drop back. The rules above carry on from the new step.</li>
-      </ul>
-
-      <h3>Best conditions</h3>
-      <p>After a walk, relaxed, awake or just waking. Come back at the first sign of stress building, before panic.</p>
-
-      <h3>Notifications</h3>
-      <p>Next rep ready, time is up on long steps, a morning day-and-place question, a training reminder if there are no reps yet that day, and a summary nudge at 22:00. Nothing between 22:30 and 07:00 except a time-up.</p>
 
       <h3>For whoever is helping</h3>
       <ul>
-        <li>Please follow the app's next rep rather than choosing steps by feel, and let her wobbles slow things down. Pushing on is what sets her back.</li>
-        <li>Keep reps boring: no big greetings or goodbyes.</li>
-        <li>Reps, notes and day settings sync between devices. A running timer lives on the device that started it, so finish a rep on the same device.</li>
-        <li>At the end of the day, the summary (from the 22:00 notification) can be shared with Claude.</li>
+        <li>Follow the app's next rep rather than choosing by feel, and let her wobbles slow things down. Keep reps boring: no big hellos or goodbyes. Best after a walk, relaxed and awake.</li>
+        <li>Everything syncs between devices. A running timer lives on the device that started it.</li>
       </ul>
     </div>
   </details>
@@ -414,9 +396,9 @@
 <dialog id="stepsSheet"><div class="stack" id="stepsBody"></div></dialog>
 <dialog id="eodSheet"><div class="stack" id="eodBody"></div></dialog>
 
-<script src="config.js?v=43"></script>
-<script src="supabase.js?v=43"></script>
-<script src="logic.js?v=43"></script>
-<script src="app.js?v=43"></script>
+<script src="config.js?v=44"></script>
+<script src="supabase.js?v=44"></script>
+<script src="logic.js?v=44"></script>
+<script src="app.js?v=44"></script>
 </body>
 </html>

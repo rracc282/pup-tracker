@@ -1,6 +1,6 @@
 // Churro tracker app. Uses logic.js (pure) and Supabase (sync + push queue).
 'use strict';
-const APP_VERSION = '43';
+const APP_VERSION = '44';
 const CFG = window.PT_CONFIG || {};
 const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -577,11 +577,13 @@ function renderRep(){
     const blocked = (!!waitInfo() || capReached(nx.step)) && !ui.override;
     const keep = ui.feedback ? feedbackHtml() : '';
     el.innerHTML = keep + bannersHtml(nx.step) +
-      `<div class="eyebrow">${nx.kind === 'warmup' ? 'Warm-up rep · easier on purpose' : 'Next rep'} · ${esc(stepTag(nx.step))}${nx.step < FIRST_OUT ? ' · ' + esc(cueName(nx.step)) : ''}</div>
-       <div class="rep-label">${esc(stepLabel(nx.step))}</div>
-       <div class="rep-sub">${esc(sub)}</div>
-       <ul class="steps">${instructionsFor(nx.step).map(t => `<li>${esc(t)}</li>`).join('')}</ul>
-       ${helpHtml(nx.step)}
+      `<div class="tapbox" data-action="togglesteps" role="button" tabindex="0" aria-expanded="${!!ui.showSteps}">
+         <div class="eyebrow">${nx.kind === 'warmup' ? 'Warm-up' : 'Next rep'} · ${esc(stepTag(nx.step))}</div>
+         <div class="rep-label">${esc(stepLabel(nx.step))}</div>
+         <div class="rep-sub" style="margin-bottom:6px">${esc(sub)}</div>
+         <div class="more-hint">${ui.showSteps ? 'Tap to hide how to do it ▴' : 'Tap for how to do it ▾'}</div>
+       </div>
+       ${ui.showSteps ? `<ul class="steps">${instructionsFor(nx.step).map(t => `<li>${esc(t)}</li>`).join('')}</ul>${helpHtml(nx.step)}` : ''}
        ${fitN > 1 ? `<div class="hint" style="margin-bottom:12px">Your time fits about ${fitN} of these. The app spaces them for you.</div>` : ''}
        <button class="btn primary" data-action="start" data-step="${nx.step}" ${blocked ? 'disabled' : ''}>Start rep</button>
        ${blocked ? '<div class="link-row"><button class="link" data-action="override">Skip the wait and start now</button></div>' : ''}`;
@@ -648,7 +650,6 @@ function renderToday(){
       <span>Calm <b>${c}</b></span><span>Wobble <b>${w}</b></span><span>Upset <b>${u}</b></span>
       <span>Rest blocks <b>${rests}</b></span>
     </div>
-    <div class="hint" style="margin-bottom:8px">Rest block: she is in the living room, door closed, while you cook, shower or take a call. Tap Done when you open it.</div>
     <button class="btn" data-action="startrest" ${ui.mode!=='idle'?'disabled':''}>Busy at home? Start a rest block</button>
 `;
 }
@@ -714,15 +715,19 @@ function progressHtml(){
   let s = progressSeries(liveEntries(), place);
   if(!s || s.length < 2) return s ? '<div class="hint">The graph starts on the first day of the front door step and needs a second day to draw a line.</div>' : '';
   s = s.slice(-28);
-  const W = 320, H = 230, L = 50, R = 12, T = 14, B = 34;
-  const top = T, floor = H - B - 18;               // plot area; the floor band holds "door only"
   const secOf = lv => (lv >= FIRST_OUT ? DUR[lv] : 0);
-  const MIN = 2, MAX = DUR[TOP];
-  const yOf = sec => sec < MIN ? floor : (floor - 22) - ((floor - 22) - top) * (Math.log(sec / MIN) / Math.log(MAX / MIN));
+  // The scale starts at door-only to 5 minutes and grows as she progresses, so early on the graph stays small.
+  const allTicks = [[0, 'Door only'], [2, '2 s'], [10, '10 s'], [60, '1 min'], [300, '5 min'], [900, '15 min'], [3600, '1 h'], [7200, '2 h'], [14400, '4 h goal']];
+  const reached = Math.max.apply(null, s.map(p => Math.max(secOf(p.level), p.maxCalm == null ? 0 : p.maxCalm)));
+  const cap = (allTicks.find(t => t[0] > reached && t[0] >= 300) || allTicks[allTicks.length - 1])[0];
+  const ticks = allTicks.filter(t => t[0] <= cap);
+  const W = 320, L = 50, R = 12, T = 10, B = 30, H = 84 + 15 * ticks.length;
+  const top = T, floor = H - B - 14;               // plot area; the floor band holds "door only"
+  const MIN = 2, MAX = cap;
+  const yOf = sec => sec < MIN ? floor : (floor - 16) - ((floor - 16) - top) * (Math.log(sec / MIN) / Math.log(MAX / MIN));
   const dayNum = d => { const [y, m, dd] = d.split('-').map(Number); return Math.round(Date.UTC(y, m - 1, dd) / 86400000); };
   const d0 = dayNum(s[0].date), span = Math.max(1, dayNum(s[s.length - 1].date) - d0);
   const xOf = d => L + (W - L - R) * ((dayNum(d) - d0) / span);
-  const ticks = [[0, 'Door only'], [2, '2 s'], [10, '10 s'], [60, '1 min'], [300, '5 min'], [3600, '1 h'], [14400, '4 h goal']];
   let g = '';
   ticks.forEach(([sec, lab]) => {
     const y = yOf(sec).toFixed(1), goal = sec === 14400;
@@ -740,7 +745,7 @@ function progressHtml(){
   const desc = `Working step over time. Now: ${stepLabel(last.level)}.` + (best >= 0 ? ` Longest calm rep so far: ${best === 0 ? 'front door only' : fmtSec(best)}.` : '');
   return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(desc)}" style="width:100%;height:auto">${g}${xa}<polyline points="${wpts}" fill="none" stroke="var(--calm)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>${cdots}${wdots}</svg>
     <div class="legend"><span><i class="lg-dot"></i>Working step (time outside)</span><span><i class="lg-dia"></i>Longest calm rep that day</span></div>
-    <div class="hint">Height is time outside on a stretched scale, so each line up is a bigger jump than the one below. Now: ${esc(stepLabel(last.level))}${best > 0 ? '. Longest calm so far: ' + esc(fmtSec(best)) : ''}.</div>`;
+`;
 }
 function moreSec(id, title, body, forceOpen){
   if(!body) return '';
@@ -1145,5 +1150,7 @@ async function boot(){
   }, 1000);
 }
 boot();
+document.addEventListener('keydown', ev => { const c2 = ev.target && ev.target.classList && ev.target.classList.contains('tapbox'); if(c2 && (ev.key === 'Enter' || ev.key === ' ')){ ev.preventDefault(); ui.showSteps = !ui.showSteps; renderRep(); } });
 document.addEventListener('keydown', ev => { const c = ev.target && ev.target.id === 'posCard'; if(c && (ev.key === 'Enter' || ev.key === ' ')){ ev.preventDefault(); openSteps(); } });
 document.addEventListener('click', ev => { if(ev.target.closest('#posCard') && !ev.target.closest('button')) openSteps(); });
+document.addEventListener('click', ev => { if(ev.target.closest('.tapbox') && !ev.target.closest('button')){ ui.showSteps = !ui.showSteps; renderRep(); } });
