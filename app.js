@@ -1,6 +1,6 @@
 // Churro tracker app. Uses logic.js (pure) and Supabase (sync + push queue).
 'use strict';
-const APP_VERSION = '39';
+const APP_VERSION = '40';
 const CFG = window.PT_CONFIG || {};
 const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -569,7 +569,7 @@ function renderRep(){
     let sub;
     if(nx.kind === 'warmup') sub = 'Warm-up. It does not count toward moving up, and your step has not changed.';
     else if(nx.fitted) sub = 'A shorter rep that fits your time.';
-    else if(nx.kind === 'decoy') sub = 'No leaving this time.';
+    else if(nx.kind === 'decoy') sub = nx.step < FIRST_OUT ? 'No leaving this time.' : 'A much shorter one on purpose, so it stays unpredictable.';
     else if(nx.afterWobble) sub = 'Easier on purpose after the wobble.';
     else if(nx.easy) sub = 'Shorter on purpose, to keep her confident.';
     else sub = 'Working step · ' + st.run + ' of ' + st.need + ' calm in a row' + (st.gate ? ', on ' + st.runDays + ' of 2 days needed' : '') + '.';
@@ -882,7 +882,7 @@ async function saveRep(outcome){
     data = Object.assign(base, { kind:'rest', minutes: Math.round(r.actualSec/60) });
     msg = outcome === 'escalated' ? ['Rest block was rough.', 'Shorten the next one or do it with the door open.'] : ['Logged.', 'Rest blocks do not change your step.'];
   } else {
-    data = Object.assign(base, { kind:'dep', level: before.level, step:r.step, early: !!r.early });
+    data = Object.assign(base, { kind:'dep', ladderVer: LADDER_VER, level: before.level, step:r.step, early: !!r.early });
     if(DUR[r.step] != null) data.targetSec = DUR[r.step];
     if(r.byPlan) data.byPlan = true;
     if(data.medicated) msg = ['Logged as medicated.', 'It does not move your step.'];

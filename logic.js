@@ -60,6 +60,9 @@ const GATE_DAY_REPS = 2;
 function gateDays(dayAw){ return Object.keys(dayAw).filter(d => dayAw[d] >= GATE_DAY_REPS).length; }
 function awakeNeed(n){ return Math.min(2, n - 1); }
 const RULES_V2_FROM = '2026-10-13';
+// Version of the step list. Every rep records the step list it was logged on. If steps are ever inserted, bump this number:
+// reps from an older list then keep the step they were actually on, so her position never shifts.
+const LADDER_VER = 4;
 function needV1(level){ return level <= 2 ? 2 : level <= 12 ? 3 : (DUR[level] <= 240) ? 2 : 3; }
 function capV1(level){ return level <= 12 ? 3 : (DUR[level] <= 240) ? 2 : 1; }
 
@@ -72,10 +75,12 @@ function isLive(e){ return !e.voided; }
 // depList: ladder entries for ONE place, already sorted. Pure and replayable from the log.
 function computeState(depList, startLevel){
   let level = depList.length && depList[0].level != null ? depList[0].level : startLevel;
-  let dayAw = {}, run = 0, runDates = new Set(), runAwake = 0, wob = 0, wobMin = null, badStep = null, nextEasy = false, lastEvent = null;
+  let dayAw = {}, run = 0, runDates = new Set(), runAwake = 0, wob = 0, wobMin = null, badStep = null, nextEasy = false, lastEvent = null, lastEasy = false;
   const adv = {}, drops = [];
   for(const e of depList){
+    if((e.ladderVer == null ? LADDER_VER : e.ladderVer) !== LADDER_VER && e.level != null) level = e.level;   // reps from an older step list keep their recorded step
     const hard = e.step >= level;
+    lastEasy = !hard;
     nextEasy = false; lastEvent = null; badStep = null;
     if(e.outcome === 'calm'){
       wob = 0; wobMin = null;
@@ -106,7 +111,7 @@ function computeState(depList, startLevel){
       { const f = level; level = Math.max(0, level - 2); run = 0; runDates = new Set(); runAwake = 0; dayAw = {}; wob = 0; wobMin = null; badStep = e.step; lastEvent = 'upset'; if(level < f) drops.push({ from: f, to: level, why: 'upset' }); }
     }
   }
-  return { level, run, runDays: level === GATE ? gateDays(dayAw) : runDates.size, gate: level === GATE, wob, nextEasy, lastEvent, badStep, need: need(level), drops };
+  return { level, run, runDays: level === GATE ? gateDays(dayAw) : runDates.size, gate: level === GATE, wob, nextEasy, lastEasy, lastEvent, badStep, need: need(level), drops };
 }
 
 // A "baseline" entry says: my step is N from here on (set by hand). Reps before it no longer count.
@@ -175,8 +180,16 @@ function rand01(seed){
   h = Math.imul(h ^ (h >>> 16), 2246822507); h = Math.imul(h ^ (h >>> 13), 3266489909); h ^= h >>> 16;
   return (h >>> 0) / 4294967296;
 }
-// Mix: 60% working step, 25% shorter or easier on purpose, 15% no-leave decoy. After a wobble the next one is always easier.
+// Mix: 60% working step, 25% shorter on purpose, 15% much shorter (a decoy). After a wobble the next one is always easier.
+// "Shorter" scales with her working step: about half to three quarters of it for an easier rep, about a tenth to a third for a decoy.
+// At the first departures that rounds down to opening and closing the door without leaving; at 15 minutes it is a shorter departure.
+// A rep that does not count (warm-up, easier, decoy) is always followed by a working-step rep, so she never gets stuck on easy ones.
 // Same log gives the same pick on every device, until the next rep is logged. Never harder than the working step.
+function shorterStep(level, f){
+  const t = DUR[level] * f; let s = LAST_CUE;
+  for(let i = FIRST_OUT; i < level; i++) if(DUR[i] <= t) s = i;
+  return s;
+}
 function pickNext(st, minutes, seed, opts){
   let target = st.level, kind = 'hard';
   const warm = !!(opts && opts.sessionStart) && st.level >= GATE && st.lastEvent !== 'wobble' && st.lastEvent !== 'wobbleDrop';
@@ -188,18 +201,20 @@ function pickNext(st, minutes, seed, opts){
   else if(st.level >= FIRST_OUT){
     const r = rand01(seed + '|a');
     if(st.lastEvent === 'wobble' || st.lastEvent === 'wobbleDrop') kind = 'easy';
+    else if(st.lastEasy) kind = 'hard';
     else if(r < 0.60) kind = 'hard';
     else if(r < 0.85) kind = 'easy';
     else kind = 'decoy';
+    const rb = rand01(seed + '|b');
     if(kind === 'easy'){
-      target = Math.max(FIRST_OUT, st.level - (1 + Math.floor(rand01(seed + '|b') * 5)));
-      if(st.level === FIRST_OUT){ target = LAST_CUE; kind = 'decoy'; }
-    } else if(kind === 'decoy'){ target = LAST_CUE; }
+      target = shorterStep(st.level, 0.50 + 0.25 * rb);
+      if(target === LAST_CUE) kind = 'decoy';   // nothing shorter than opening and closing the door
+    } else if(kind === 'decoy'){ target = shorterStep(st.level, 0.10 + 0.25 * rb); }
   }
   else if(st.level >= 2){
     // Cue stage: 75% working step, 25% one or two rungs easier (never harder). Easier after a wobble.
     const r = rand01(seed + '|a');
-    if(st.lastEvent === 'wobble' || st.lastEvent === 'wobbleDrop' || r < 0.25){
+    if(st.lastEvent === 'wobble' || st.lastEvent === 'wobbleDrop' || (!st.lastEasy && r < 0.25)){
       kind = 'easy';
       target = Math.max(0, st.level - (1 + Math.floor(rand01(seed + '|b') * 2)));
     }
@@ -473,4 +488,4 @@ function buildSummary(entries, days, date, place){
   return L.join('\n');
 }
 
-if(typeof module !== 'undefined') module.exports = { MILESTONES, DUR, TOP, FIRST_OUT, LAST_CUE, QUICK_CEILING, isQuick, STEP_NAMES, CUE_IDS, idOf, indexOfId, stepLabel, stepTag, stepEst, gapSec, fits, need, capFor, sortedByDate, computeState, depsFor, stateFrom, baselineFor, startFor, skippedRanges, barInfo, levelsAfter, rand01, pickNext, ceilingFor, cooldownMs, waitUntil, coachMsg, normalizeEntry, buildSummary, fmtSec, sessionCount, isTiny, restSec, SESSION_MIN, SESSION_MAX, sessionSizeFor, breakMinFor, isSessionStart, RULES_V2_FROM, GATE, GATE_DAYS, GATE_DAY_REPS, dateAdd, helpAlerts, windowStats, weekCompare, progressSeries };
+if(typeof module !== 'undefined') module.exports = { MILESTONES, DUR, TOP, FIRST_OUT, LAST_CUE, QUICK_CEILING, isQuick, STEP_NAMES, CUE_IDS, idOf, indexOfId, stepLabel, stepTag, stepEst, gapSec, fits, need, capFor, sortedByDate, computeState, depsFor, stateFrom, baselineFor, startFor, skippedRanges, barInfo, levelsAfter, rand01, pickNext, ceilingFor, cooldownMs, waitUntil, coachMsg, normalizeEntry, buildSummary, fmtSec, sessionCount, isTiny, restSec, SESSION_MIN, SESSION_MAX, sessionSizeFor, breakMinFor, isSessionStart, RULES_V2_FROM, LADDER_VER, shorterStep, GATE, GATE_DAYS, GATE_DAY_REPS, dateAdd, helpAlerts, windowStats, weekCompare, progressSeries };

@@ -244,3 +244,29 @@ console.log('logic tests (grandfathering) ok');
   assert.strictEqual(D[Number(Object.keys(L.MILESTONES).find(k=>L.MILESTONES[k]==='bins out'))],60);
   console.log('logic tests (finer ladder) ok');
 }
+// ---- varied reps scale with the working step; a rep that does not count is followed by a working-step rep; step-list pin ----
+{
+  const D=L.DUR, idx=s=>D.indexOf(s);
+  // at 2 s the shorter options are the door; at 5 min they are real, shorter departures; at 15 min too
+  for(const [lv,min,max] of [[idx(2),0,0],[idx(300),30,225],[idx(900),90,675]]){
+    const seen=new Set();
+    for(let k=0;k<400;k++){
+      const nx=L.pickNext({level:lv,lastEvent:'calmProgress',lastEasy:false},270,'v'+k);
+      seen.add(nx.kind);
+      if(nx.kind!=='hard'){ const d=nx.step===L.LAST_CUE?0:D[nx.step]; assert(d<D[lv]); if(nx.kind==='decoy'||nx.kind==='easy') assert(d>=0&&d<=D[lv]*0.75); }
+      const warm=L.pickNext({level:lv,lastEvent:'calmProgress',lastEasy:true},270,'v'+k); assert.strictEqual(warm.kind,'hard'); assert.strictEqual(warm.step,lv);
+    }
+    assert(seen.has('hard')&&seen.has('decoy'));
+    if(lv!==idx(2)) assert(seen.has('easy'));
+  }
+  // at 5 min a decoy is a shorter departure, not the door
+  let decoyDurs=new Set(); for(let k=0;k<600;k++){ const nx=L.pickNext({level:idx(300),lastEvent:null,lastEasy:false},270,'d'+k); if(nx.kind==='decoy') decoyDurs.add(nx.step===L.LAST_CUE?0:D[nx.step]); }
+  assert(Array.from(decoyDurs).some(d=>d>0&&d<=100));
+  // pin: reps from an older step list keep the step they were on
+  const mk=(step,level,extra)=>Object.assign({kind:'dep',outcome:'calm',date:'2026-10-20',step,level,createdAt:Date.now(),id:Math.random()+'',place:'home'},extra||{});
+  const old=[mk(14,14,{ladderVer:3,createdAt:1}),mk(14,14,{ladderVer:3,createdAt:2}),mk(14,14,{ladderVer:3,createdAt:3})];
+  assert.strictEqual(L.computeState(old,0).level,15);
+  const odd=[mk(20,20,{ladderVer:3,createdAt:1})];   // a recorded step is kept even if the replay would have been elsewhere
+  assert.strictEqual(L.computeState(odd,0).level,20);
+}
+console.log('logic tests (varied reps, pin) ok');
