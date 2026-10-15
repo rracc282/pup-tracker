@@ -180,36 +180,60 @@ function rand01(seed){
   h = Math.imul(h ^ (h >>> 16), 2246822507); h = Math.imul(h ^ (h >>> 13), 3266489909); h ^= h >>> 16;
   return (h >>> 0) / 4294967296;
 }
-// Mix: 60% working step, 25% shorter on purpose, 15% much shorter (a decoy). After a wobble the next one is always easier.
-// "Shorter" scales with her working step: about half to three quarters of it for an easier rep, about a tenth to a third for a decoy.
-// At the first departures that rounds down to opening and closing the door without leaving; at 15 minutes it is a shorter departure.
-// A rep that does not count (warm-up, easier, decoy) is always followed by a working-step rep, so she never gets stuck on easy ones.
+// Mix at the departure steps: 60% working step, 40% shorter on purpose. After a wobble the next one is easier.
+// "Shorter" is always a real, shorter departure and scales with the working step: from about a tenth to three quarters of it.
+// (At 2 s there is nothing shorter than 2 s, so those reps stay at the working step.)
+// A rep that does not count (warm-up or shorter) is always followed by a working-step rep, so she never gets stuck on easy ones.
+// Warm-ups: 1 or 2 per session (see warmupPlan). While the working step is a few seconds, a warm-up may be just opening and closing the door.
 // Same log gives the same pick on every device, until the next rep is logged. Never harder than the working step.
 function shorterStep(level, f){
-  const t = DUR[level] * f; let s = LAST_CUE;
+  const t = DUR[level] * f; let s = level > FIRST_OUT ? FIRST_OUT : level;   // a shorter rep is always a real departure
   for(let i = FIRST_OUT; i < level; i++) if(DUR[i] <= t) s = i;
   return s;
 }
+function localDateOf(ms){ const d = new Date(ms); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+// Is the next rep a warm-up, and which one? deps: this place's live ladder reps, sorted. Returns { no, of } or null.
+// Two warm-ups instead of one when: the last training day had a wobble or upset, or she has been away from training for 3+ days,
+// or she is one calm rep from moving up (so the deciding rep comes after she has settled in).
+function warmupPlan(deps, st, now){
+  if(st.level < GATE || st.lastEvent === 'wobble' || st.lastEvent === 'wobbleDrop') return null;
+  const times = deps.map(e => e.createdAt || 0);
+  let i = deps.length;
+  while(i > 0 && (i === deps.length ? now : times[i]) - times[i - 1] < SESSION_GAP_MS) i--;
+  const session = deps.slice(i), before = deps.slice(0, i);
+  let two = st.need >= 2 && st.run === st.need - 1;
+  if(before.length){
+    const lastDate = before[before.length - 1].date;
+    if(before.some(e => e.date === lastDate && e.outcome !== 'calm')) two = true;
+    if((Date.parse(localDateOf(now) + 'T12:00:00Z') - Date.parse(lastDate + 'T12:00:00Z')) / 86400000 >= 3) two = true;
+  }
+  const of = two ? 2 : 1;
+  const warmedUp = session.length && session.every(e => e.level != null && e.step < e.level);
+  if(!session.length) return { no: 1, of };
+  if(warmedUp && session.length < of) return { no: session.length + 1, of };
+  return null;
+}
 function pickNext(st, minutes, seed, opts){
-  let target = st.level, kind = 'hard';
-  const warm = !!(opts && opts.sessionStart) && st.level >= GATE && st.lastEvent !== 'wobble' && st.lastEvent !== 'wobbleDrop';
+  let target = st.level, kind = 'hard', warmNo = 0, warmOf = 0;
+  const plan = opts && (opts.warm || (opts.sessionStart ? { no: 1, of: 1 } : null));
+  const warm = !!plan && st.level >= GATE && st.lastEvent !== 'wobble' && st.lastEvent !== 'wobbleDrop';
   if(warm){
-    // Warm-up: the first rep of a session is one or two steps easier, so she settles in before the real test.
-    kind = 'warmup';
-    target = st.level === GATE ? 10 + Math.floor(rand01(seed + '|w') * 2) : Math.max(LAST_CUE, st.level - (2 + Math.floor(rand01(seed + '|w') * 2)));
+    // Warm-up: one or two steps easier, so she settles in before the real test.
+    kind = 'warmup'; warmNo = plan.no; warmOf = plan.of;
+    const back = 2 + Math.floor(rand01(seed + '|w') * 2);
+    const floor = DUR[st.level] <= 7 ? LAST_CUE : FIRST_OUT;   // door-only warm-ups until she is past a few seconds
+    target = st.level === GATE ? 10 + Math.floor(rand01(seed + '|w') * 2) : Math.max(floor, st.level - back);
   }
   else if(st.level >= FIRST_OUT){
     const r = rand01(seed + '|a');
-    if(st.lastEvent === 'wobble' || st.lastEvent === 'wobbleDrop') kind = 'easy';
+    const wob = st.lastEvent === 'wobble' || st.lastEvent === 'wobbleDrop';
+    if(wob) kind = 'easy';
     else if(st.lastEasy) kind = 'hard';
-    else if(r < 0.60) kind = 'hard';
-    else if(r < 0.85) kind = 'easy';
-    else kind = 'decoy';
-    const rb = rand01(seed + '|b');
+    else kind = r < 0.60 ? 'hard' : 'easy';
     if(kind === 'easy'){
-      target = shorterStep(st.level, 0.50 + 0.25 * rb);
-      if(target === LAST_CUE) kind = 'decoy';   // nothing shorter than opening and closing the door
-    } else if(kind === 'decoy'){ target = shorterStep(st.level, 0.10 + 0.25 * rb); }
+      target = shorterStep(st.level, 0.10 + 0.65 * rand01(seed + '|b'));
+      if(target >= st.level) kind = 'hard';   // nothing shorter to offer: repeat the working step
+    }
   }
   else if(st.level >= 2){
     // Cue stage: 75% working step, 25% one or two rungs easier (never harder). Easier after a wobble.
@@ -223,7 +247,7 @@ function pickNext(st, minutes, seed, opts){
   if(st.badStep != null && target > st.badStep){ target = st.badStep; if(kind === 'hard') kind = 'easy'; }
   let s = target;
   while(s > 0 && !fits(s, minutes)) s--;
-  return { step: s, targetStep: target, kind, easy: s < st.level, fitted: s < target, afterWobble: st.lastEvent === 'wobble' || st.lastEvent === 'wobbleDrop' };
+  return { step: s, targetStep: target, kind, easy: s < st.level, fitted: s < target, afterWobble: st.lastEvent === 'wobble' || st.lastEvent === 'wobbleDrop', warmNo, warmOf };
 }
 
 // True when this would be the first rep of a session: no ladder rep yet, or the last one was 45+ minutes before `at`.
@@ -488,4 +512,4 @@ function buildSummary(entries, days, date, place){
   return L.join('\n');
 }
 
-if(typeof module !== 'undefined') module.exports = { MILESTONES, DUR, TOP, FIRST_OUT, LAST_CUE, QUICK_CEILING, isQuick, STEP_NAMES, CUE_IDS, idOf, indexOfId, stepLabel, stepTag, stepEst, gapSec, fits, need, capFor, sortedByDate, computeState, depsFor, stateFrom, baselineFor, startFor, skippedRanges, barInfo, levelsAfter, rand01, pickNext, ceilingFor, cooldownMs, waitUntil, coachMsg, normalizeEntry, buildSummary, fmtSec, sessionCount, isTiny, restSec, SESSION_MIN, SESSION_MAX, sessionSizeFor, breakMinFor, isSessionStart, RULES_V2_FROM, LADDER_VER, shorterStep, GATE, GATE_DAYS, GATE_DAY_REPS, dateAdd, helpAlerts, windowStats, weekCompare, progressSeries };
+if(typeof module !== 'undefined') module.exports = { MILESTONES, DUR, TOP, FIRST_OUT, LAST_CUE, QUICK_CEILING, isQuick, STEP_NAMES, CUE_IDS, idOf, indexOfId, stepLabel, stepTag, stepEst, gapSec, fits, need, capFor, sortedByDate, computeState, depsFor, stateFrom, baselineFor, startFor, skippedRanges, barInfo, levelsAfter, rand01, pickNext, ceilingFor, cooldownMs, waitUntil, coachMsg, normalizeEntry, buildSummary, fmtSec, sessionCount, isTiny, restSec, SESSION_MIN, SESSION_MAX, sessionSizeFor, breakMinFor, isSessionStart, warmupPlan, RULES_V2_FROM, LADDER_VER, shorterStep, GATE, GATE_DAYS, GATE_DAY_REPS, dateAdd, helpAlerts, windowStats, weekCompare, progressSeries };

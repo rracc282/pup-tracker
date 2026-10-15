@@ -244,29 +244,41 @@ console.log('logic tests (grandfathering) ok');
   assert.strictEqual(D[Number(Object.keys(L.MILESTONES).find(k=>L.MILESTONES[k]==='bins out'))],60);
   console.log('logic tests (finer ladder) ok');
 }
-// ---- varied reps scale with the working step; a rep that does not count is followed by a working-step rep; step-list pin ----
+// ---- shorter reps are real departures that scale with the working step; a rep that does not count is followed by a working-step rep; warm-up plan; step-list pin ----
 {
-  const D=L.DUR, idx=s=>D.indexOf(s);
-  // at 2 s the shorter options are the door; at 5 min they are real, shorter departures; at 15 min too
-  for(const [lv,min,max] of [[idx(2),0,0],[idx(300),30,225],[idx(900),90,675]]){
-    const seen=new Set();
-    for(let k=0;k<400;k++){
-      const nx=L.pickNext({level:lv,lastEvent:'calmProgress',lastEasy:false},270,'v'+k);
-      seen.add(nx.kind);
-      if(nx.kind!=='hard'){ const d=nx.step===L.LAST_CUE?0:D[nx.step]; assert(d<D[lv]); if(nx.kind==='decoy'||nx.kind==='easy') assert(d>=0&&d<=D[lv]*0.75); }
-      const warm=L.pickNext({level:lv,lastEvent:'calmProgress',lastEasy:true},270,'v'+k); assert.strictEqual(warm.kind,'hard'); assert.strictEqual(warm.step,lv);
+  const D=L.DUR, idx=x=>D.indexOf(x);
+  // at 2 s there is nothing shorter: every non-warm-up rep is a working-step rep
+  for(let k=0;k<300;k++){ const nx=L.pickNext({level:idx(2),lastEvent:'calmProgress',lastEasy:false,need:3,run:1},270,'a'+k); assert.strictEqual(nx.kind,'hard'); assert.strictEqual(nx.step,idx(2)); }
+  // beyond that, shorter reps are real departures (never the door), between ~10% and 75% of the working step
+  for(const sec of [3,10,60,300,900]){
+    const lv=idx(sec), kinds=new Set();
+    for(let k=0;k<500;k++){
+      const nx=L.pickNext({level:lv,lastEvent:'calmProgress',lastEasy:false,need:3,run:1},270,'b'+k); kinds.add(nx.kind);
+      assert(nx.kind==='hard'||nx.kind==='easy'); if(nx.kind==='easy'){ assert(nx.step>=L.FIRST_OUT&&nx.step<lv); assert(D[nx.step]<=D[lv]*0.75+1e-9); }
+      const after=L.pickNext({level:lv,lastEvent:'calmProgress',lastEasy:true,need:3,run:1},270,'b'+k); assert.strictEqual(after.kind,'hard'); assert.strictEqual(after.step,lv);
     }
-    assert(seen.has('hard')&&seen.has('decoy'));
-    if(lv!==idx(2)) assert(seen.has('easy'));
+    assert(kinds.has('hard')&&kinds.has('easy'),'mix at '+sec);
   }
-  // at 5 min a decoy is a shorter departure, not the door
-  let decoyDurs=new Set(); for(let k=0;k<600;k++){ const nx=L.pickNext({level:idx(300),lastEvent:null,lastEasy:false},270,'d'+k); if(nx.kind==='decoy') decoyDurs.add(nx.step===L.LAST_CUE?0:D[nx.step]); }
-  assert(Array.from(decoyDurs).some(d=>d>0&&d<=100));
+  // warm-ups: door-only while the working step is a few seconds, real shorter departures after that
+  for(let k=0;k<200;k++){
+    const w3=L.pickNext({level:idx(3),lastEvent:null,need:3,run:0},270,'c'+k,{warm:{no:1,of:1}}); assert.strictEqual(w3.kind,'warmup'); assert(w3.step>=12&&w3.step<idx(3));
+    const w60=L.pickNext({level:idx(60),lastEvent:null,need:3,run:0},270,'d'+k,{warm:{no:2,of:2}}); assert.strictEqual(w60.kind,'warmup'); assert(w60.step>=L.FIRST_OUT&&w60.step<idx(60)); assert.strictEqual(w60.warmNo,2);
+  }
+  // warm-up plan: one by default, two after trouble yesterday, after 3+ days away, or one rep from moving up
+  const T=Date.parse('2026-11-20T09:00:00'), mk=(date,ts,o,step,level)=>({kind:'dep',outcome:o,date,createdAt:ts,step,level,place:'home',id:date+ts});
+  const st={level:idx(10),lastEvent:'calmProgress',need:3,run:0};
+  assert.deepStrictEqual(L.warmupPlan([mk('2026-11-19',T-20*3600000,'calm',idx(10),idx(10))],st,T),{no:1,of:1});
+  assert.deepStrictEqual(L.warmupPlan([mk('2026-11-19',T-20*3600000,'mild',idx(10),idx(10))],st,T),{no:1,of:2});
+  assert.deepStrictEqual(L.warmupPlan([mk('2026-11-16',T-4*86400000,'calm',idx(10),idx(10))],st,T),{no:1,of:2});
+  assert.deepStrictEqual(L.warmupPlan([mk('2026-11-19',T-20*3600000,'calm',idx(10),idx(10))],Object.assign({},st,{run:2}),T),{no:1,of:2});
+  // second warm-up follows the first inside a session, then no more
+  const first=mk('2026-11-20',T-10*60000,'calm',idx(7),idx(10));
+  assert.deepStrictEqual(L.warmupPlan([mk('2026-11-19',T-20*3600000,'mild',idx(10),idx(10)),first],st,T),{no:2,of:2});
+  const second=mk('2026-11-20',T-5*60000,'calm',idx(7),idx(10));
+  assert.strictEqual(L.warmupPlan([mk('2026-11-19',T-20*3600000,'mild',idx(10),idx(10)),first,second],st,T),null);
   // pin: reps from an older step list keep the step they were on
-  const mk=(step,level,extra)=>Object.assign({kind:'dep',outcome:'calm',date:'2026-10-20',step,level,createdAt:Date.now(),id:Math.random()+'',place:'home'},extra||{});
-  const old=[mk(14,14,{ladderVer:3,createdAt:1}),mk(14,14,{ladderVer:3,createdAt:2}),mk(14,14,{ladderVer:3,createdAt:3})];
-  assert.strictEqual(L.computeState(old,0).level,15);
-  const odd=[mk(20,20,{ladderVer:3,createdAt:1})];   // a recorded step is kept even if the replay would have been elsewhere
-  assert.strictEqual(L.computeState(odd,0).level,20);
+  const mk2=(step,level,extra)=>Object.assign({kind:'dep',outcome:'calm',date:'2026-10-20',step,level,createdAt:Date.now(),id:Math.random()+'',place:'home'},extra||{});
+  assert.strictEqual(L.computeState([mk2(14,14,{ladderVer:3,createdAt:1}),mk2(14,14,{ladderVer:3,createdAt:2}),mk2(14,14,{ladderVer:3,createdAt:3})],0).level,15);
+  assert.strictEqual(L.computeState([mk2(20,20,{ladderVer:3,createdAt:1})],0).level,20);
 }
-console.log('logic tests (varied reps, pin) ok');
+console.log('logic tests (varied reps, warm-up plan, pin) ok');

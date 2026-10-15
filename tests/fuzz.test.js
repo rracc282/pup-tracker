@@ -12,7 +12,7 @@ for(let run=0;run<600;run++){
     // invariants on suggestion
     check(pk.step<=st.level,'suggestion above working step',{lvl:st.level,step:pk.step});
     if(st.badStep!=null) check(pk.step<=st.badStep,'suggestion above step that wobbled',{bad:st.badStep,step:pk.step,ev:st.lastEvent});
-    if((st.lastEvent==='wobble'||st.lastEvent==='wobbleDrop')&&st.level>=2) check(pk.step<st.level,'not easier than working step after wobble',{lvl:st.level,step:pk.step,k:pk.kind,ev:st.lastEvent});
+    if((st.lastEvent==='wobble'||st.lastEvent==='wobbleDrop')&&st.level>=2&&st.level!==L.FIRST_OUT) check(pk.step<st.level,'not easier than working step after wobble',{lvl:st.level,step:pk.step,k:pk.kind,ev:st.lastEvent});
     check(st.level>=0&&st.level<=TOP,'level out of range',{lvl:st.level});
     if(i%15===14){ t+=86400000; }
     t+=600000+Math.floor(rnd()*3000000);

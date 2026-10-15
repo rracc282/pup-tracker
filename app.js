@@ -1,6 +1,6 @@
 // Churro tracker app. Uses logic.js (pure) and Supabase (sync + push queue).
 'use strict';
-const APP_VERSION = '40';
+const APP_VERSION = '41';
 const CFG = window.PT_CONFIG || {};
 const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -238,7 +238,7 @@ function scheduleReady(){
     const last = live.slice().sort((a,b) => a.createdAt - b.createdAt).pop();
     if(last.outcome === 'escalated') return;
     const st = stateFrom(liveEntries(), place);
-    const nx = pickNext(st, effPocket(st), place + '|' + depsFor(liveEntries(), place).length + '|' + st.level, { sessionStart: isSessionStart(liveEntries(), w.until) });
+    const nx = pickNext(st, effPocket(st), place + '|' + depsFor(liveEntries(), place).length + '|' + st.level, { warm: warmupPlan(depsFor(liveEntries(), place), st, w.until) });
     if(capReached(nx.step)) return;
     const m = READY_MSGS[Math.floor(Math.random() * READY_MSGS.length)];
     qInsert({ fire_at: new Date(w.until).toISOString(), kind:'ready', tag:'ready', title:m[0], body:m[1], open:'' });
@@ -565,11 +565,10 @@ function renderRep(){
   if(ui.mode === 'idle'){
     const live = ladderEntries();
     const st = stateFrom(live, place);
-    const nx = pickNext(st, effPocket(st), place + '|' + depsFor(live, place).length + '|' + st.level, { sessionStart: isSessionStart(liveEntries(), Date.now()) });
+    const nx = pickNext(st, effPocket(st), place + '|' + depsFor(live, place).length + '|' + st.level, { warm: warmupPlan(depsFor(live, place), st, Date.now()) });
     let sub;
-    if(nx.kind === 'warmup') sub = 'Warm-up. It does not count toward moving up, and your step has not changed.';
+    if(nx.kind === 'warmup') sub = (nx.warmOf > 1 ? 'Warm-up ' + nx.warmNo + ' of ' + nx.warmOf + '. ' : 'Warm-up. ') + 'It does not count toward moving up, and your step has not changed.';
     else if(nx.fitted) sub = 'A shorter rep that fits your time.';
-    else if(nx.kind === 'decoy') sub = nx.step < FIRST_OUT ? 'No leaving this time.' : 'A much shorter one on purpose, so it stays unpredictable.';
     else if(nx.afterWobble) sub = 'Easier on purpose after the wobble.';
     else if(nx.easy) sub = 'Shorter on purpose, to keep her confident.';
     else sub = 'Working step · ' + st.run + ' of ' + st.need + ' calm in a row' + (st.gate ? ', on ' + st.runDays + ' of 2 days needed' : '') + '.';
