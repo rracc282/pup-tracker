@@ -1,6 +1,6 @@
 // Churro tracker app. Uses logic.js (pure) and Supabase (sync + push queue).
 'use strict';
-const APP_VERSION = '45';
+const APP_VERSION = '46';
 const CFG = window.PT_CONFIG || {};
 const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -579,7 +579,7 @@ function renderRep(){
     const keep = ui.feedback ? feedbackHtml() : '';
     el.innerHTML = keep + bannersHtml(nx.step) +
       `<div class="tapbox" data-action="togglesteps" role="button" tabindex="0" aria-expanded="${!!ui.showSteps}">
-         <div class="eyebrow">${nx.kind === 'warmup' ? 'Warm-up' : 'Next rep'} · ${esc(stepTag(nx.step))}</div>
+         <div class="eyebrow">${nx.kind === 'warmup' ? 'Warm-up rep' : 'Next rep'}</div>
          <div class="rep-label">${esc(stepLabel(nx.step))}</div>
          <div class="rep-sub" style="margin-bottom:6px">${esc(sub)}</div>
          <div class="more-hint">${ui.showSteps ? 'Tap to hide how to do it ▴' : 'Tap for how to do it ▾'}</div>
