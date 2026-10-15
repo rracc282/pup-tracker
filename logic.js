@@ -51,7 +51,7 @@ function fits(i, minutes){ return stepEst(i) <= minutes * 60; }
 const GATE = 12;      // "Open and close the front door": the last step before real departures
 const GATE_DAYS = 2;  // calm reps there must come from at least this many different days
 function need(level){ return level <= 2 ? 2 : level <= 11 ? 3 : level === GATE ? 4 : DUR[level] <= 60 ? 3 : DUR[level] <= 240 ? 2 : 3; }
-function capFor(level){ return level <= 5 ? 3 : level <= 11 ? 2 : DUR[level] <= 60 ? 1 : DUR[level] <= 240 ? 2 : 1; }
+function capFor(level){ return level <= 5 ? 3 : level <= 11 ? 2 : level > GATE && DUR[level] <= 10 ? 2 : DUR[level] <= 60 ? 1 : DUR[level] <= 240 ? 2 : 1; }
 // The stricter rules above apply from this day on. Reps logged before it are replayed under the rules she trained with,
 // so changing the rules never rewrites her history or moves her back.
 // From the front door on, a calm rep while she is asleep does not teach her about the cue. At least this many of the calm reps must be awake.

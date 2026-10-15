@@ -159,7 +159,7 @@ console.log('logic tests (new place) ok');
   let i4=0,t4=Date.parse('2026-11-12T09:00:00Z');
   const G=(step,outcome,date)=>({id:'g'+(i4++),kind:'dep',place:'home',date,step,outcome,createdAt:(t4+=60000)});
   assert.strictEqual(L.need(12),4); assert.strictEqual(L.GATE,12);
-  assert.strictEqual(L.capFor(3),3); assert.strictEqual(L.capFor(8),2); assert.strictEqual(L.capFor(12),1); assert.strictEqual(L.capFor(L.DUR.indexOf(60)),1); assert.strictEqual(L.capFor(L.DUR.indexOf(90)),2); assert.strictEqual(L.capFor(L.DUR.indexOf(300)),1);
+  assert.strictEqual(L.capFor(3),3); assert.strictEqual(L.capFor(8),2); assert.strictEqual(L.capFor(12),1); assert.strictEqual(L.capFor(L.DUR.indexOf(60)),1); assert.strictEqual(L.capFor(L.DUR.indexOf(2)),2); assert.strictEqual(L.capFor(L.DUR.indexOf(10)),2); assert.strictEqual(L.capFor(L.DUR.indexOf(12)),1); assert.strictEqual(L.capFor(L.DUR.indexOf(90)),2); assert.strictEqual(L.capFor(L.DUR.indexOf(300)),1);
   assert.strictEqual(L.need(15),3); assert.strictEqual(L.need(L.DUR.indexOf(120)),2); assert.strictEqual(L.need(L.DUR.indexOf(60)),3); assert.strictEqual(L.need(L.DUR.indexOf(300)),3);
   { const A=(step,date,asleep)=>Object.assign(G(step,'calm',date),{tags:asleep?['Asleep before']:[]});
     const D1='2026-11-12', D2='2026-11-13';
