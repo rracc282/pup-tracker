@@ -75,7 +75,7 @@ function isLive(e){ return !e.voided; }
 // depList: ladder entries for ONE place, already sorted. Pure and replayable from the log.
 function computeState(depList, startLevel){
   let level = depList.length && depList[0].level != null ? depList[0].level : startLevel;
-  let dayAw = {}, run = 0, runDates = new Set(), runAwake = 0, wob = 0, wobMin = null, badStep = null, nextEasy = false, lastEvent = null, lastEasy = false;
+  let rough = {}, dayAw = {}, run = 0, runDates = new Set(), runAwake = 0, wob = 0, wobMin = null, badStep = null, nextEasy = false, lastEvent = null, lastEasy = false;
   const adv = {}, drops = [];
   for(const e of depList){
     if((e.ladderVer == null ? LADDER_VER : e.ladderVer) !== LADDER_VER && e.level != null) level = e.level;   // reps from an older step list keep their recorded step
@@ -92,6 +92,7 @@ function computeState(depList, startLevel){
           if(level >= TOP){ run = 0; runDates = new Set(); runAwake = 0; dayAw = {}; lastEvent = 'top'; }
           else if(v2 && level === GATE && gateDays(dayAw) < GATE_DAYS){ lastEvent = 'gate'; }   // needs awake calm reps on two different days
           else if(v2 && level > GATE && runAwake < awakeNeed(needNow)){ lastEvent = 'awake'; }   // calm, but too many asleep reps
+          else if(v2 && rough[e.date]){ run = needNow; lastEvent = 'roughDay'; }   // a wobble or upset earlier today: no step-up until tomorrow
           else if(used < capNow){ level++; run = 0; runDates = new Set(); runAwake = 0; dayAw = {}; adv[e.date] = used + 1; lastEvent = 'advance'; }
           else { run = needNow; lastEvent = 'capped'; }
         } else {
@@ -102,12 +103,14 @@ function computeState(depList, startLevel){
         lastEvent = 'easyOk';
       }
     } else if(e.outcome === 'mild'){
+      rough[e.date] = true;
       run = 0; runDates = new Set(); runAwake = 0; dayAw = {}; wob++; badStep = e.step; wobMin = wobMin == null ? e.step : Math.min(wobMin, e.step);
       // Two wobbles in a row: drop one step, or two when the wobbles happened on easier steps than the working one,
       // so the new working step is never above where she actually struggled.
       if(wob >= 2){ const f = level; level = Math.max(0, Math.min(level - 1, Math.max(level - 2, wobMin - 1))); wob = 0; wobMin = null; lastEvent = 'wobbleDrop'; if(level < f) drops.push({ from: f, to: level, why: 'wobbles' }); }
       else lastEvent = 'wobble';
     } else if(e.outcome === 'escalated'){
+      rough[e.date] = true;
       { const f = level; level = Math.max(0, level - 2); run = 0; runDates = new Set(); runAwake = 0; dayAw = {}; wob = 0; wobMin = null; badStep = e.step; lastEvent = 'upset'; if(level < f) drops.push({ from: f, to: level, why: 'upset' }); }
     }
   }
@@ -324,6 +327,7 @@ function coachMsg(ev, st){
     case 'calmProgress':
       return ['Calm.', (st.need - st.run) + ' more calm in a row at this step and you move up.' + (st.level >= 2 ? ' Some reps in between are easier on purpose and do not count.' : '')];
     case 'easyOk': return ['Good.', 'Easier reps keep her confident. They do not count toward moving up.'];
+    case 'roughDay': return ['Calm, but not a step-up day.', 'She had a wobble earlier today, so you stay at this step and move up tomorrow.'];
     case 'capped': return ['Calm, and you are at today\'s step-up limit.', 'More reps today stay at this step.'];
     case 'awake': return ['Calm, but she was asleep.', 'From the front door on, some of the calm reps need to happen while she is awake, so she actually notices the cue. Do the next rep while she is awake or dozing.'];
     case 'gate': return ['Calm, but not yet.', 'The front door is the last step before real departures. It needs at least 2 calm reps with her awake or dozing on each of two different days, so come back tomorrow.'];

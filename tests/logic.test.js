@@ -282,3 +282,14 @@ console.log('logic tests (grandfathering) ok');
   assert.strictEqual(L.computeState([mk2(20,20,{ladderVer:3,createdAt:1})],0).level,20);
 }
 console.log('logic tests (varied reps, warm-up plan, pin) ok');
+
+{
+  // after a wobble, no step-up that day; the first calm rep the next day moves her up
+  const L2=L, id=()=>Math.random()+'', mk=(step,level,o,date,ts)=>({kind:'dep',place:'home',id:id(),step,level,outcome:o,date,createdAt:ts});
+  const s=L2.DUR.indexOf(3), T=Date.parse('2026-11-20T09:00:00Z');
+  const reps=[mk(s,s,'mild','2026-11-20',T),mk(s,s,'calm','2026-11-20',T+1e6),mk(s,s,'calm','2026-11-20',T+2e6),mk(s,s,'calm','2026-11-20',T+3e6)];
+  let st=L2.computeState(reps,0); assert.strictEqual(st.level,s); assert.strictEqual(st.lastEvent,'roughDay');
+  st=L2.computeState(reps.concat([mk(s,s,'calm','2026-11-21',T+86400000)]),0); assert.strictEqual(st.level,s+1);
+  const calmOnly=[0,1,2].map(i=>mk(s,s,'calm','2026-11-20',T+i*1e6)); assert.strictEqual(L2.computeState(calmOnly,0).level,s+1);
+}
+console.log('logic tests (rough day) ok');
