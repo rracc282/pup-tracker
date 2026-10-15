@@ -1,6 +1,6 @@
 // Churro tracker app. Uses logic.js (pure) and Supabase (sync + push queue).
 'use strict';
-const APP_VERSION = '38';
+const APP_VERSION = '39';
 const CFG = window.PT_CONFIG || {};
 const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -347,7 +347,6 @@ function renderPlace(){ /* place is chosen in the day sheet now */ }
 function renderPocket(){
   $('pocketCard').hidden = !pocketMatters(stateFrom(ladderEntries(), place));
   $('pocketChips').innerHTML = POCKETS.map(([m,l]) => `<button class="chip" data-pocket="${m}" aria-pressed="${pocket===m}" ${ui.mode!=='idle'?'disabled':''}>${l}</button>`).join('');
-  $('spotChips').innerHTML = SPOTS.map(s => `<button class="chip" data-spot="${s}" aria-pressed="${spot===s}">${s}</button>`).join('');
 }
 function renderProgressBox(){
   const el = $('progCard'); if(!el) return;
@@ -456,7 +455,7 @@ function lastRepDetails(){
   const f = ui.feedback; if(!f) return null;
   const prev = liveEntries().filter(e => e.kind === 'dep' && e.id !== f.id && e.place === place).sort((x, y) => (y.createdAt || 0) - (x.createdAt || 0))[0];
   if(!prev) return null;
-  const tags = (prev.tags || []).filter(t => !(f.pre && PRE_STATES.some(p => p[0] === t)));
+  const tags = (prev.tags || []).filter(t => !PRE_STATES.some(p => p[0] === t));
   const pocket = prev.pocket ? String(prev.pocket).split(', ').filter(Boolean) : [];
   const keepFlags = !!prev.walked || !!prev.partner;
   if(!tags.length && !pocket.length && !keepFlags) return null;
@@ -470,6 +469,10 @@ function feedbackHtml(){
   let h = `<div class="feedback ${f.outcome}" role="status"><b>${esc(head)}</b>${esc(tail)}
     <div class="fb-form">
       <textarea class="note" id="fbNote" placeholder="Note: what did she do? Tap the mic on your keyboard to dictate." maxlength="800">${esc(f.note||'')}</textarea>`;
+  if(f.kind === 'dep' && !f.medicated){
+    h = h.replace('<div class="fb-form">', `<div class="fb-form"><div class="hint" style="margin:10px 0 6px">Was she awake or asleep when you left?</div>
+      <div class="chips" style="margin-bottom:10px" role="group" aria-label="Awake or asleep">${PRE_STATES.map(([t, l]) => `<button class="chip" data-pre="${t}" aria-pressed="${f.tags.includes(t)}">${l}</button>`).join('')}</div>`);
+  }
   if(f.open){
     h += `<div class="chips" role="group" aria-label="What were you doing">
         ${POCKET_TAGS.map(t => `<button class="chip" data-tag="${t}" aria-pressed="${f.pocket.includes(t)}">${t}</button>`).join('')}
@@ -581,8 +584,6 @@ function renderRep(){
        <ul class="steps">${instructionsFor(nx.step).map(t => `<li>${esc(t)}</li>`).join('')}</ul>
        ${helpHtml(nx.step)}
        ${fitN > 1 ? `<div class="hint" style="margin-bottom:12px">Your time fits about ${fitN} of these. The app spaces them for you.</div>` : ''}
-       <div class="hint" style="margin-bottom:6px">How is she right now?</div>
-       <div class="chips" style="margin-bottom:14px" role="group" aria-label="How she is right now">${PRE_STATES.map(([t, l]) => `<button class="chip" data-pre="${t}" aria-pressed="${ui.pre === t}">${l}</button>`).join('')}</div>
        <button class="btn primary" data-action="start" data-step="${nx.step}" ${blocked ? 'disabled' : ''}>Start rep</button>
        ${blocked ? '<div class="link-row"><button class="link" data-action="override">Skip the wait and start now</button></div>' : ''}`;
     return;
@@ -875,7 +876,6 @@ async function saveRep(outcome){
   const live = ladderEntries();
   const before = stateFrom(live, r.place);
   const base = { v:3, id: uuid(), place:r.place, date, actualSec:r.actualSec, outcome, notes:'', createdAt: Date.now() };
-  if(spot) base.spot = spot;
   if(isMedicated()) base.medicated = true;
   let data, msg;
   if(r.kind === 'rest'){
@@ -892,7 +892,7 @@ async function saveRep(outcome){
     }
   }
   if(r.kind === 'dep' && r.pre) data.tags = [r.pre];
-  ui.feedback = { outcome, msg, id:data.id, open:false, note:'', pocket:[], tags:(data.tags || []).slice(), walked:false, partner:false, pre:r.pre || null };
+  ui.feedback = { outcome, msg, id:data.id, kind:r.kind, medicated:!!data.medicated, open:false, note:'', pocket:[], tags:(data.tags || []).slice(), walked:false, partner:false, pre:r.pre || null };
   const timeId = r.queueId; const forgotId = r.forgotId;
   ui.mode = 'idle'; ui.rep = null; saveActive(); stopTicking();
   putEntry(data);
@@ -1031,10 +1031,9 @@ document.addEventListener('click', ev => {
   if(t.dataset.daytype){ putDay(todayStr(), { day_type: t.dataset.daytype, place: dayState().place || 'home' }); openDaySheet(); render(); return; }
   if(t.dataset.place){ putDay(todayStr(), { place: t.dataset.place }); if(ui.mode === 'idle') place = t.dataset.place; ui.feedback = null; openDaySheet(); render({ rep:true }); return; }
   if(t.dataset.pocket){ if(ui.mode === 'idle'){ pocket = parseInt(t.dataset.pocket, 10); lsSet('pt-pocket', String(pocket)); render({ rep:true }); } return; }
-  if(t.dataset.spot){ spot = spot === t.dataset.spot ? '' : t.dataset.spot; lsSet('pt-spot', spot); renderPocket(); return; }
   if(t.dataset.out){ saveRep(t.dataset.out); return; }
   if(t.dataset.tag){ if(ui.feedback){ const f = ui.feedback; f.note = ($('fbNote') && $('fbNote').value) || f.note; const k = t.dataset.tag; f.pocket = f.pocket.includes(k) ? f.pocket.filter(x => x !== k) : f.pocket.concat(k); flushNote(); renderRep(); } return; }
-  if(t.dataset.pre){ ui.pre = ui.pre === t.dataset.pre ? null : t.dataset.pre; renderRep(); return; }
+  if(t.dataset.pre){ if(ui.feedback){ const f = ui.feedback; f.note = ($('fbNote') && $('fbNote').value) || f.note; const k = t.dataset.pre; const had = f.tags.includes(k); f.tags = f.tags.filter(x => !PRE_STATES.some(p => p[0] === x)); if(!had) f.tags.push(k); flushNote(); renderRep(); } return; }
   if(t.dataset.tgroup){ ui.tgOpen = ui.tgOpen || {}; const g = t.dataset.tgroup; ui.tgOpen[g] = !ui.tgOpen[g]; if(ui.feedback){ ui.feedback.note = ($('fbNote') && $('fbNote').value) || ui.feedback.note; } renderRep(); return; }
   if(t.dataset.rtag){ if(ui.feedback){ const f = ui.feedback; f.note = ($('fbNote') && $('fbNote').value) || f.note; const k = t.dataset.rtag; f.tags = f.tags.includes(k) ? f.tags.filter(x => x !== k) : f.tags.concat(k); flushNote(); renderRep(); } return; }
   if(t.dataset.setout){ const e = repMap.get(t.dataset.id); if(e){ putEntry(Object.assign({}, e, { outcome: t.dataset.setout })); render({ rep:true }); } return; }
