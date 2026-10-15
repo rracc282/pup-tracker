@@ -196,24 +196,26 @@ function shorterStep(level, f){
 }
 function localDateOf(ms){ const d = new Date(ms); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
 // Is the next rep a warm-up, and which one? deps: this place's live ladder reps, sorted. Returns { no, of } or null.
-// Two warm-ups instead of one when: the last training day had a wobble or upset, or she has been away from training for 3+ days,
-// or she is one calm rep from moving up (so the deciding rep comes after she has settled in).
+// Warm-ups start the day: one or two before her first rep of the day, then at most one more after a gap of 3 hours or more.
+// Shorter gaps (a meeting, lunch) carry on as normal reps. Two warm-ups instead of one when: the last training day had a wobble or
+// upset, she has been away from training for 3+ days, or she is one calm rep from moving up (so the deciding rep comes after she has settled in).
+const WARM_GAP_MS = 3 * 3600 * 1000;
 function warmupPlan(deps, st, now){
   if(st.level < GATE || st.lastEvent === 'wobble' || st.lastEvent === 'wobbleDrop') return null;
-  const times = deps.map(e => e.createdAt || 0);
-  let i = deps.length;
-  while(i > 0 && (i === deps.length ? now : times[i]) - times[i - 1] < SESSION_GAP_MS) i--;
-  const session = deps.slice(i), before = deps.slice(0, i);
+  const today = localDateOf(now);
+  const todays = deps.filter(e => e.date === today), before = deps.filter(e => e.date < today);
   let two = st.need >= 2 && st.run === st.need - 1;
   if(before.length){
     const lastDate = before[before.length - 1].date;
     if(before.some(e => e.date === lastDate && e.outcome !== 'calm')) two = true;
-    if((Date.parse(localDateOf(now) + 'T12:00:00Z') - Date.parse(lastDate + 'T12:00:00Z')) / 86400000 >= 3) two = true;
+    if((Date.parse(today + 'T12:00:00Z') - Date.parse(lastDate + 'T12:00:00Z')) / 86400000 >= 3) two = true;
   }
   const of = two ? 2 : 1;
-  const warmedUp = session.length && session.every(e => e.level != null && e.step < e.level);
-  if(!session.length) return { no: 1, of };
-  if(warmedUp && session.length < of) return { no: session.length + 1, of };
+  if(!todays.length) return { no: 1, of };
+  const warmedUp = todays.every(e => e.level != null && e.step < e.level);
+  if(warmedUp && todays.length < of) return { no: todays.length + 1, of };
+  const last = deps[deps.length - 1];
+  if(now - (last.createdAt || 0) >= WARM_GAP_MS) return { no: 1, of: 1 };
   return null;
 }
 function pickNext(st, minutes, seed, opts){

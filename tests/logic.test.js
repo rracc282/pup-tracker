@@ -264,18 +264,25 @@ console.log('logic tests (grandfathering) ok');
     const w3=L.pickNext({level:idx(3),lastEvent:null,need:3,run:0},270,'c'+k,{warm:{no:1,of:1}}); assert.strictEqual(w3.kind,'warmup'); assert(w3.step>=12&&w3.step<idx(3));
     const w60=L.pickNext({level:idx(60),lastEvent:null,need:3,run:0},270,'d'+k,{warm:{no:2,of:2}}); assert.strictEqual(w60.kind,'warmup'); assert(w60.step>=L.FIRST_OUT&&w60.step<idx(60)); assert.strictEqual(w60.warmNo,2);
   }
-  // warm-up plan: one by default, two after trouble yesterday, after 3+ days away, or one rep from moving up
+  // warm-up plan: first rep of the day gets 1 (or 2 after trouble yesterday, 3+ days away, or one rep from moving up); later only after a 3 h gap
   const T=Date.parse('2026-11-20T09:00:00'), mk=(date,ts,o,step,level)=>({kind:'dep',outcome:o,date,createdAt:ts,step,level,place:'home',id:date+ts});
   const st={level:idx(10),lastEvent:'calmProgress',need:3,run:0};
-  assert.deepStrictEqual(L.warmupPlan([mk('2026-11-19',T-20*3600000,'calm',idx(10),idx(10))],st,T),{no:1,of:1});
-  assert.deepStrictEqual(L.warmupPlan([mk('2026-11-19',T-20*3600000,'mild',idx(10),idx(10))],st,T),{no:1,of:2});
+  const yest=(o)=>mk('2026-11-19',T-20*3600000,o,idx(10),idx(10));
+  assert.deepStrictEqual(L.warmupPlan([yest('calm')],st,T),{no:1,of:1});
+  assert.deepStrictEqual(L.warmupPlan([yest('mild')],st,T),{no:1,of:2});
   assert.deepStrictEqual(L.warmupPlan([mk('2026-11-16',T-4*86400000,'calm',idx(10),idx(10))],st,T),{no:1,of:2});
-  assert.deepStrictEqual(L.warmupPlan([mk('2026-11-19',T-20*3600000,'calm',idx(10),idx(10))],Object.assign({},st,{run:2}),T),{no:1,of:2});
-  // second warm-up follows the first inside a session, then no more
+  assert.deepStrictEqual(L.warmupPlan([yest('calm')],Object.assign({},st,{run:2}),T),{no:1,of:2});
+  // second warm-up follows the first, then no more
   const first=mk('2026-11-20',T-10*60000,'calm',idx(7),idx(10));
-  assert.deepStrictEqual(L.warmupPlan([mk('2026-11-19',T-20*3600000,'mild',idx(10),idx(10)),first],st,T),{no:2,of:2});
+  assert.deepStrictEqual(L.warmupPlan([yest('mild'),first],st,T),{no:2,of:2});
   const second=mk('2026-11-20',T-5*60000,'calm',idx(7),idx(10));
-  assert.strictEqual(L.warmupPlan([mk('2026-11-19',T-20*3600000,'mild',idx(10),idx(10)),first,second],st,T),null);
+  assert.strictEqual(L.warmupPlan([yest('mild'),first,second],st,T),null);
+  // later in the day: gaps under 3 h (meetings, lunch) carry on without a warm-up; 3 h or more gets one
+  const real=(ts)=>mk('2026-11-20',ts,'calm',idx(10),idx(10));
+  const wu=mk('2026-11-20',T-6*3600000,'calm',idx(7),idx(10));
+  assert.strictEqual(L.warmupPlan([yest('calm'),wu,real(T-5*3600000)],st,T-5*3600000+3600000),null);       // 1 h gap, same day
+  assert.strictEqual(L.warmupPlan([yest('calm'),wu,real(T-5*3600000)],st,T-5*3600000+2*3600000),null);     // 2 h gap
+  assert.deepStrictEqual(L.warmupPlan([yest('calm'),wu,real(T-5*3600000)],st,T-5*3600000+3*3600000),{no:1,of:1}); // 3 h gap
   // pin: reps from an older step list keep the step they were on
   const mk2=(step,level,extra)=>Object.assign({kind:'dep',outcome:'calm',date:'2026-10-20',step,level,createdAt:Date.now(),id:Math.random()+'',place:'home'},extra||{});
   assert.strictEqual(L.computeState([mk2(14,14,{ladderVer:3,createdAt:1}),mk2(14,14,{ladderVer:3,createdAt:2}),mk2(14,14,{ladderVer:3,createdAt:3})],0).level,15);
