@@ -60,6 +60,8 @@ const GATE_DAY_REPS = 2;
 function gateDays(dayAw){ return Object.keys(dayAw).filter(d => dayAw[d] >= GATE_DAY_REPS).length; }
 function awakeNeed(n){ return Math.min(2, n - 1); }
 const RULES_V2_FROM = '2026-10-13';
+// From this day a small wobble no longer blocks step-ups for the rest of the day (it only restarts the count). An upset still does.
+const WOBBLE_OK_FROM = '2026-10-18';
 // Version of the step list. Every rep records the step list it was logged on. If steps are ever inserted, bump this number:
 // reps from an older list then keep the step they were actually on, so her position never shifts.
 const LADDER_VER = 4;
@@ -103,7 +105,7 @@ function computeState(depList, startLevel){
         lastEvent = 'easyOk';
       }
     } else if(e.outcome === 'mild'){
-      rough[e.date] = true;
+      if(e.date < WOBBLE_OK_FROM) rough[e.date] = true;
       run = 0; runDates = new Set(); runAwake = 0; dayAw = {}; wob++; badStep = e.step; wobMin = wobMin == null ? e.step : Math.min(wobMin, e.step);
       // Two wobbles in a row: drop one step, or two when the wobbles happened on easier steps than the working one,
       // so the new working step is never above where she actually struggled.
@@ -329,7 +331,7 @@ function coachMsg(ev, st){
     case 'calmProgress':
       return ['Calm.', (st.need - st.run) + ' more calm in a row at this step and you move up.' + (st.level >= 2 ? ' Some reps in between are easier on purpose and do not count.' : '')];
     case 'easyOk': return ['Good.', 'Easier reps keep her confident. They do not count toward moving up.'];
-    case 'roughDay': return ['Calm, but not a step-up day.', 'She had a wobble earlier today, so you stay at this step and move up tomorrow.'];
+    case 'roughDay': return ['Calm, but not a step-up day.', 'She had an upset earlier today, so you stay at this step and move up tomorrow.'];
     case 'capped': return ['Calm, and you are at today\'s step-up limit.', 'More reps today stay at this step.'];
     case 'awake': return ['Calm, but she was asleep.', 'From the front door on, some of the calm reps need to happen while she is awake, so she actually notices the cue. Do the next rep while she is awake or dozing.'];
     case 'gate': return ['Calm, but not yet.', 'The front door is the last step before real departures. It needs at least 2 calm reps with her awake or dozing on each of two different days, so come back tomorrow.'];
