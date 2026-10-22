@@ -302,3 +302,27 @@ console.log('logic tests (varied reps, warm-up plan, pin) ok');
   st=L2.computeState(up.concat([mk(t,t,'calm','2026-11-21',T+86400000)]),0); assert.strictEqual(st.level,t+1);
 }
 console.log('logic tests (rough day) ok');
+
+{
+  // daily climb limit (from 23 Oct 2026): at most 1.5x the day's starting step; 1 step-up on the first day back after 2+ days away
+  const id=()=>Math.random()+'', mk=(step,level,date,ts)=>({kind:'dep',place:'home',id:id(),step,level,outcome:'calm',date,createdAt:ts});
+  const i7=L.DUR.indexOf(7), i10=L.DUR.indexOf(10), i12=L.DUR.indexOf(12), T=Date.parse('2026-11-10T09:00:00Z');
+  const calm=(n,step,date,t0)=>Array.from({length:n},(_,i)=>mk(step,step,date,t0+i*1e6));
+  // yesterday trained, so today is not a "back" day: 7 s -> 10 s, then 10 s -> 12 s is blocked (12 > 1.5 x 7)
+  const prev=calm(1,i7,'2026-11-09',T-86400000);
+  let st=L.computeState(prev.concat(calm(3,i7,'2026-11-10',T),calm(3,i10,'2026-11-10',T+9e6)),0);
+  assert.strictEqual(st.level,i10); assert.strictEqual(st.lastEvent,'capped');
+  // starting from 10 s the same day allows 12 s and 15 s
+  const p10=calm(1,i10,'2026-11-09',T-86400000);
+  st=L.computeState(p10.concat(calm(3,i10,'2026-11-10',T)),0); assert.strictEqual(st.level,i12);
+  // next day she starts at 10 and can climb again
+  // first day back after 3 empty days: only one step-up
+  const away=calm(1,i7,'2026-11-05',T-5*86400000);
+  st=L.computeState(away.concat(calm(3,i7,'2026-11-10',T),calm(3,i10,'2026-11-10',T+9e6)),0);
+  assert.strictEqual(st.level,i10);
+  // before the start date the old two-a-day rule still applies
+  const old=(step,date,t)=>({kind:'dep',place:'home',id:id(),step,level:step,outcome:'calm',date,createdAt:t});
+  st=L.computeState([0,1,2].map(i=>old(i7,'2026-10-22',T+i*1e6)).concat([0,1,2].map(i=>old(i10,'2026-10-22',T+9e6+i*1e6))),0);
+  assert.strictEqual(st.level,i12);
+}
+console.log('logic tests (daily climb limit) ok');

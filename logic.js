@@ -62,6 +62,10 @@ function awakeNeed(n){ return Math.min(2, n - 1); }
 const RULES_V2_FROM = '2026-10-13';
 // From this day a small wobble no longer blocks step-ups for the rest of the day (it only restarts the count). An upset still does.
 const WOBBLE_OK_FROM = '2026-10-18';
+// From this day, a day's climb on departure steps is limited: she can end the day at most this many times higher than the step she
+// started it on, and only 1 step-up on the first day back after 2 or more days without training.
+const CLIMB_FROM = '2026-10-23', CLIMB_RATIO = 1.5, AWAY_DAYS = 2;
+function dayNum(d){ return Math.round(Date.parse(d + 'T00:00:00Z') / 86400000); }
 // Version of the step list. Every rep records the step list it was logged on. If steps are ever inserted, bump this number:
 // reps from an older list then keep the step they were actually on, so her position never shifts.
 const LADDER_VER = 4;
@@ -76,11 +80,14 @@ function sortedByDate(list){
 function isLive(e){ return !e.voided; }
 // depList: ladder entries for ONE place, already sorted. Pure and replayable from the log.
 function computeState(depList, startLevel){
-  let level = depList.length && depList[0].level != null ? depList[0].level : startLevel;
+  let level = depList.length && depList[0].level != null ? depList[0].level : startLevel, prevDate = null;
+  const dayStart = {}, backDay = {};
   let rough = {}, dayAw = {}, run = 0, runDates = new Set(), runAwake = 0, wob = 0, wobMin = null, badStep = null, nextEasy = false, lastEvent = null, lastEasy = false;
   const adv = {}, drops = [];
   for(const e of depList){
     if((e.ladderVer == null ? LADDER_VER : e.ladderVer) !== LADDER_VER && e.level != null) level = e.level;   // reps from an older step list keep their recorded step
+    if(dayStart[e.date] === undefined){ dayStart[e.date] = level; backDay[e.date] = prevDate != null && dayNum(e.date) - dayNum(prevDate) - 1 >= AWAY_DAYS; }
+    prevDate = e.date;
     const hard = e.step >= level;
     lastEasy = !hard;
     nextEasy = false; lastEvent = null; badStep = null;
@@ -95,7 +102,7 @@ function computeState(depList, startLevel){
           else if(v2 && level === GATE && gateDays(dayAw) < GATE_DAYS){ lastEvent = 'gate'; }   // needs awake calm reps on two different days
           else if(v2 && level > GATE && runAwake < awakeNeed(needNow)){ lastEvent = 'awake'; }   // calm, but too many asleep reps
           else if(v2 && rough[e.date]){ run = needNow; lastEvent = 'roughDay'; }   // a wobble or upset earlier today: no step-up until tomorrow
-          else if(used < capNow){ level++; run = 0; runDates = new Set(); runAwake = 0; dayAw = {}; adv[e.date] = used + 1; lastEvent = 'advance'; }
+          else if(used < capNow && !(e.date >= CLIMB_FROM && ((backDay[e.date] && used >= 1) || (level >= FIRST_OUT && DUR[dayStart[e.date]] > 0 && DUR[level + 1] > CLIMB_RATIO * DUR[dayStart[e.date]] + 1e-9)))){ level++; run = 0; runDates = new Set(); runAwake = 0; dayAw = {}; adv[e.date] = used + 1; lastEvent = 'advance'; }
           else { run = needNow; lastEvent = 'capped'; }
         } else {
           lastEvent = 'calmProgress';
@@ -520,4 +527,4 @@ function buildSummary(entries, days, date, place){
   return L.join('\n');
 }
 
-if(typeof module !== 'undefined') module.exports = { MILESTONES, DUR, TOP, FIRST_OUT, LAST_CUE, QUICK_CEILING, isQuick, STEP_NAMES, CUE_IDS, idOf, indexOfId, stepLabel, stepTag, stepEst, gapSec, fits, need, capFor, sortedByDate, computeState, depsFor, stateFrom, baselineFor, startFor, skippedRanges, barInfo, levelsAfter, rand01, pickNext, ceilingFor, cooldownMs, waitUntil, coachMsg, normalizeEntry, buildSummary, fmtSec, sessionCount, isTiny, restSec, SESSION_MIN, SESSION_MAX, sessionSizeFor, breakMinFor, isSessionStart, warmupPlan, RULES_V2_FROM, LADDER_VER, shorterStep, GATE, GATE_DAYS, GATE_DAY_REPS, dateAdd, helpAlerts, windowStats, weekCompare, progressSeries };
+if(typeof module !== 'undefined') module.exports = { MILESTONES, DUR, TOP, FIRST_OUT, LAST_CUE, QUICK_CEILING, isQuick, STEP_NAMES, CUE_IDS, idOf, indexOfId, stepLabel, stepTag, stepEst, gapSec, fits, need, capFor, sortedByDate, computeState, depsFor, stateFrom, baselineFor, startFor, skippedRanges, barInfo, levelsAfter, rand01, pickNext, ceilingFor, cooldownMs, waitUntil, coachMsg, normalizeEntry, buildSummary, fmtSec, sessionCount, isTiny, restSec, SESSION_MIN, SESSION_MAX, sessionSizeFor, breakMinFor, isSessionStart, warmupPlan, RULES_V2_FROM, CLIMB_FROM, LADDER_VER, shorterStep, GATE, GATE_DAYS, GATE_DAY_REPS, dateAdd, helpAlerts, windowStats, weekCompare, progressSeries };
