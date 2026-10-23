@@ -387,3 +387,17 @@ console.log('logic tests (alert, new-step warm-ups) ok');
   assert.strictEqual(L.stateFrom([mk(i120,i120,'2026-11-01',T)],'zurich','2026-11-20').level,0);
 }
 console.log('logic tests (3 calm everywhere, break easing) ok');
+
+{
+  // graph: a day that starts easier is flagged, after a long break and after a step back
+  const id=()=>Math.random()+'', i15=L.DUR.indexOf(15), T=Date.parse('2026-11-01T09:00:00Z');
+  const mk=(step,date,t,outcome)=>({kind:'dep',place:'home',id:id(),step,level:step,outcome:outcome||'calm',date,createdAt:t});
+  const door=L.LAST_CUE;
+  const base=[mk(i15,'2026-10-30',T-86400000),mk(i15,'2026-11-01',T),mk(i15,'2026-11-01',T+1e6)];
+  let s=L.progressSeries(base.concat([mk(i15-1,'2026-11-09',T+8*86400000)]),'home');
+  assert.strictEqual(s[s.length-1].easier,'break'); assert.strictEqual(s[s.length-1].start,i15);
+  s=L.progressSeries(base.concat([mk(i15,'2026-11-02',T+86400000,'escalated'),mk(i15-2,'2026-11-03',T+2*86400000)]),'home');
+  assert.strictEqual(s[s.length-1].easier,'drop');
+  s=L.progressSeries(base.concat([mk(i15,'2026-11-02',T+86400000)]),'home'); assert.strictEqual(s[s.length-1].easier,null);
+}
+console.log('logic tests (graph easier starts) ok');

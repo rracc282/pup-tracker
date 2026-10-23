@@ -37,8 +37,13 @@
     --upset-bg:#F8E1DC;
     --radius:16px;
   }
-  .progday{margin:8px 0 4px;padding:8px 10px;border:1px solid var(--line);border-radius:10px;font-size:13px;line-height:1.45;}
-  .progday b{font-weight:600;}
+  .pgwrap{display:flex;align-items:flex-start;}
+  .pgaxis{flex:none;display:block;}
+  .pgscroll{flex:1;min-width:0;overflow-x:auto;-webkit-overflow-scrolling:touch;}
+  .pgscroll svg{display:block;}
+  .progcap{font-size:12.5px;color:var(--ink-2);line-height:1.4;margin:4px 0 2px;min-height:2.8em;}
+  .progcap b{color:var(--ink);font-weight:600;}
+  .lg-tri{width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-top:8px solid var(--wobble);display:inline-block;}
   .legend{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:12px;color:var(--ink-2);margin:6px 0 4px;}
   .legend span{display:inline-flex;align-items:center;gap:6px;}
   .lg-dot{width:10px;height:10px;border-radius:50%;background:var(--calm);display:inline-block;}
@@ -414,9 +419,9 @@
 <dialog id="stepsSheet"><div class="stack" id="stepsBody"></div></dialog>
 <dialog id="eodSheet"><div class="stack" id="eodBody"></div></dialog>
 
-<script src="config.js?v=53"></script>
-<script src="supabase.js?v=53"></script>
-<script src="logic.js?v=53"></script>
-<script src="app.js?v=53"></script>
+<script src="config.js?v=54"></script>
+<script src="supabase.js?v=54"></script>
+<script src="logic.js?v=54"></script>
+<script src="app.js?v=54"></script>
 </body>
 </html>

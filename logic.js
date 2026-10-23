@@ -448,7 +448,7 @@ function progressSeries(entries, place){
   const lv = levelsAfter(mine, startFor(entries, place));
   const byDay = new Map();
   mine.forEach((e, i) => {
-    const d = byDay.get(e.date) || { date: e.date, start: i ? lv[i - 1] : first, level: 0, end: 0, maxCalm: null, reps: 0, calm: 0, alert: 0, mild: 0, esc: 0 };
+    const d = byDay.get(e.date) || { date: e.date, start: i ? computeState(mine.slice(0, i), startFor(entries, place), place === 'home' ? e.date : null).level : first, level: 0, end: 0, maxCalm: null, reps: 0, calm: 0, alert: 0, mild: 0, esc: 0 };
     d.level = d.end = lv[i];
     d.reps++; if(e.outcome === 'calm') d.calm++; else if(e.outcome === 'alert') d.alert++; else if(e.outcome === 'mild') d.mild++; else if(e.outcome === 'escalated') d.esc++;
     // longest time outside that she managed calmly that day (0 = only the front door)
@@ -458,7 +458,11 @@ function progressSeries(entries, place){
   // The graph starts on the first day she actually did the front door step (or beyond), not with the early cue work.
   const firstDoor = mine.find(e => e.step >= LAST_CUE);
   const all = Array.from(byDay.values());
-  return firstDoor ? all.filter(d => d.date >= firstDoor.date) : all;
+  const out = firstDoor ? all.filter(d => d.date >= firstDoor.date) : all;
+  // easier: she started this day on a lower step than where she finished the day before ('break', after a long break)
+  // or lower than the step she started the day before on ('drop', after a wobble or upset).
+  out.forEach((d, k) => { d.easier = null; if(k){ const q = out[k - 1]; if(d.start < q.end) d.easier = 'break'; else if(d.start < q.start) d.easier = 'drop'; } });
+  return out;
 }
 
 function buildSummary(entries, days, date, place){
