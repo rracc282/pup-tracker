@@ -160,7 +160,7 @@ console.log('logic tests (new place) ok');
   const G=(step,outcome,date)=>({id:'g'+(i4++),kind:'dep',place:'home',date,step,outcome,createdAt:(t4+=60000)});
   assert.strictEqual(L.need(12),4); assert.strictEqual(L.GATE,12);
   assert.strictEqual(L.capFor(3),3); assert.strictEqual(L.capFor(8),2); assert.strictEqual(L.capFor(12),1); assert.strictEqual(L.capFor(L.DUR.indexOf(60)),1); assert.strictEqual(L.capFor(L.DUR.indexOf(2)),2); assert.strictEqual(L.capFor(L.DUR.indexOf(10)),2); assert.strictEqual(L.capFor(L.DUR.indexOf(12)),1); assert.strictEqual(L.capFor(L.DUR.indexOf(90)),2); assert.strictEqual(L.capFor(L.DUR.indexOf(300)),1);
-  assert.strictEqual(L.need(15),3); assert.strictEqual(L.need(L.DUR.indexOf(120)),2); assert.strictEqual(L.need(L.DUR.indexOf(60)),3); assert.strictEqual(L.need(L.DUR.indexOf(300)),3);
+  assert.strictEqual(L.need(15),3); assert.strictEqual(L.need(L.DUR.indexOf(120)),3); assert.strictEqual(L.need(L.DUR.indexOf(60)),3); assert.strictEqual(L.need(L.DUR.indexOf(300)),3);
   { const A=(step,date,asleep)=>Object.assign(G(step,'calm',date),{tags:asleep?['Asleep before']:[]});
     const D1='2026-11-12', D2='2026-11-13';
     // each of two days needs at least 2 awake calm reps
@@ -365,3 +365,25 @@ console.log('logic tests (graph series) ok');
   const stn2=L.computeState(prev2,0); assert.strictEqual(stn2.level,s); assert.deepStrictEqual(L.warmupPlan(prev2,stn2,T2),{no:1,of:2}); // new step: two
 }
 console.log('logic tests (alert, new-step warm-ups) ok');
+
+{
+  const id=()=>Math.random()+'', mk=(step,level,date,ts,place,outcome)=>({kind:'dep',place:place||'home',id:id(),step,level,outcome:outcome||'calm',date,createdAt:ts});
+  const i120=L.DUR.indexOf(120), i90=L.DUR.indexOf(90), T=Date.parse('2026-11-01T09:00:00Z');
+  // 3 calm reps are needed on every departure step from 23 Oct 2026; earlier days replay with the old rule (2 from 75 s to 4 min)
+  const c2=[mk(i90,i90,'2026-11-01',T),mk(i90,i90,'2026-11-01',T+1e6)];
+  assert.strictEqual(L.computeState(c2,0).level,i90);
+  assert.strictEqual(L.computeState(c2.concat([mk(i90,i90,'2026-11-01',T+2e6)]),0).level,i90+1);
+  const old2=[mk(i90,i90,'2026-10-20',T),mk(i90,i90,'2026-10-20',T+1e6)];
+  assert.strictEqual(L.computeState(old2,0).level,i90+1);
+  // after 7+ days without training at Home she starts one step easier; before that, no change
+  const last=[mk(i120,i120,'2026-11-01',T)];
+  let st=L.computeState(last,0,'2026-11-07'); assert.strictEqual(st.level,i120); assert.strictEqual(st.eased,null);
+  st=L.computeState(last,0,'2026-11-08'); assert.strictEqual(st.level,i120-1); assert.strictEqual(st.eased.days,7);
+  // logging that first rep keeps the same result (replay agrees with the preview)
+  st=L.computeState(last.concat([mk(i120-1,i120-1,'2026-11-08',T+7*86400000)]),0); assert.strictEqual(st.level,i120-1); assert.strictEqual(st.eased,null);
+  // Zurich is not eased, and the rule does not apply to days before 23 Oct 2026
+  assert.strictEqual(L.stateFrom([mk(i120,i120,'2026-11-01',T,'zurich')],'zurich','2026-11-20').eased,null);
+  assert.strictEqual(L.computeState([mk(i120,i120,'2026-10-01',T)],0,'2026-10-20').level,i120);
+  assert.strictEqual(L.stateFrom([mk(i120,i120,'2026-11-01',T)],'zurich','2026-11-20').level,0);
+}
+console.log('logic tests (3 calm everywhere, break easing) ok');

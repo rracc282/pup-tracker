@@ -1,6 +1,6 @@
 // Churro tracker app. Uses logic.js (pure) and Supabase (sync + push queue).
 'use strict';
-const APP_VERSION = '52';
+const APP_VERSION = '53';
 const CFG = window.PT_CONFIG || {};
 const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -26,6 +26,8 @@ function uuid(){
 
 const PLACES = [['home','Home'],['zurich','Zurich'],['other','Elsewhere']];
 const PLACE_NAME = { home:'Home', zurich:'Zurich', other:'Elsewhere' };
+// The ladder state as of today: after a long break, Home starts one step easier even before the first rep.
+function stateNow(list, pl){ return stateFrom(list, pl, todayStr()); }
 const OUT_NAME = { calm:'Calm', alert:'Alert', mild:'Wobble', escalated:'Upset' };
 const POCKET_TAGS = ['Coffee','Shower','Bins','Cooking','Call','Evening','Other'];
 const TAG_GROUPS = [
@@ -238,7 +240,7 @@ function scheduleReady(){
     if(optOn('eve')){ const u = new Date(w.until); if(u.getHours() * 60 + u.getMinutes() >= 20 * 60 + 30) return; }
     const last = live.slice().sort((a,b) => a.createdAt - b.createdAt).pop();
     if(last.outcome === 'escalated') return;
-    const st = stateFrom(liveEntries(), place);
+    const st = stateNow(liveEntries(), place);
     const nx = pickNext(st, effPocket(st), place + '|' + depsFor(liveEntries(), place).length + '|' + st.level, { warm: warmupPlan(depsFor(liveEntries(), place), st, w.until) });
     if(capReached(nx.step)) return;
     const m = READY_MSGS[Math.floor(Math.random() * READY_MSGS.length)];
@@ -279,7 +281,7 @@ function openDaySheet(){
 
 // ---------- step legend (opens when the position card is tapped) ----------
 function openSteps(){
-  const st = stateFrom(ladderEntries(), place);
+  const st = stateNow(ladderEntries(), place);
   let html = '<h2>All steps</h2>', last = '';
   for(let i = 0; i <= TOP; i++){
     const g = stepTag(i);
@@ -346,7 +348,7 @@ function ladderEntries(){ return liveEntries(); }  // depsFor() further drops me
 // ---------- rendering ----------
 function renderPlace(){ /* place is chosen in the day sheet now */ }
 function renderPocket(){
-  $('pocketCard').hidden = !pocketMatters(stateFrom(ladderEntries(), place));
+  $('pocketCard').hidden = !pocketMatters(stateNow(ladderEntries(), place));
   $('pocketChips').innerHTML = POCKETS.map(([m,l]) => `<button class="chip" data-pocket="${m}" aria-pressed="${pocket===m}" ${ui.mode!=='idle'?'disabled':''}>${l}</button>`).join('');
 }
 function renderProgressBox(){
@@ -357,7 +359,7 @@ function renderProgressBox(){
 }
 function renderPos(){
   renderProgressBox();
-  const st = stateFrom(ladderEntries(), place);
+  const st = stateNow(ladderEntries(), place);
   $('posNow').textContent = stepLabel(st.level);
   $('posStep').textContent = 'Step ' + (st.level+1) + ' of ' + (TOP+1) + ' · ' + st.run + ' of ' + st.need + ' calm' + (st.gate ? ' · ' + st.runDays + ' of 2 days' : '') + ' · goal 4 h';
   const pct = v => (v / TOP * 100) + '%';
@@ -512,10 +514,14 @@ function bannersHtml(step){
   const last = todays.length ? todays[todays.length - 1] : null;
   if(last && last.outcome === 'escalated'){
     h += `<div class="banner upset">She had a rough rep today. Pausing until tomorrow is a good call.</div>`;
-  } else if(!isMedicated() && stateFrom(ladderEntries(), place).lastEvent === 'capped' && last && last.date === todayStr()){
+  } else if(!isMedicated() && stateNow(ladderEntries(), place).lastEvent === 'capped' && last && last.date === todayStr()){
     h += `<div class="banner info">She has earned every step-up allowed today. Stopping here is a good call. Extra reps today only repeat this step.</div>`;
   } else if(capReached(step)){
     h += `<div class="banner info">That is enough ${isQuick(step) ? 'quick' : 'longer'} reps for today (${catLimit(step)}). More will not speed things up. Rest blocks still help.</div>`;
+  }
+  if(!todays.length && !isMedicated()){
+    const sn = stateNow(ladderEntries(), place);
+    if(sn.eased) h += `<div class="banner info">It has been ${sn.eased.days} days since her last training day at Home, so today starts one step easier.</div>`;
   }
   const w = waitInfo();
   if(w){
@@ -540,7 +546,7 @@ function sessionStop(st){
 }
 function restDayStop(){ return dayType() === 'rest' && lsGet('pt-rest-ok') !== todayStr(); }
 function stopCard(){
-  const st = stateFrom(ladderEntries(), place);
+  const st = stateNow(ladderEntries(), place);
   if(restDayStop()) return ['Rest day', 'No training today', 'You marked today as a rest day. Days off give her and you a break, and the ladder keeps your place.', 'restok', 'Train anyway'];
   if(sessionStop(st)) return ['Two sessions done', 'That is enough for today', 'Two sessions is plenty at this stage. More will not speed things up, and she is better off with a calm rest of the day.', 'sesok', 'Keep training today'];
   if(eveningStop()) return ['Evening stop', 'Time to wind down', 'It is after 20:30. Evening training is fine when it suits you. Keep it short and calm, and let her settle well before bed.', 'eveok', 'Keep training tonight'];
@@ -569,7 +575,7 @@ function renderRep(){
   }
   if(ui.mode === 'idle'){
     const live = ladderEntries();
-    const st = stateFrom(live, place);
+    const st = stateNow(live, place);
     const nx = pickNext(st, effPocket(st), place + '|' + depsFor(live, place).length + '|' + st.level, { warm: warmupPlan(depsFor(live, place), st, Date.now()) });
     let sub;
     if(nx.kind === 'warmup') sub = (nx.warmOf > 1 ? 'Warm-up ' + nx.warmNo + ' of ' + nx.warmOf + '. ' : 'Warm-up. ') + 'It does not count toward moving up, and your step has not changed.';
@@ -718,8 +724,8 @@ function weekHtml(){
     </table><div class="hint">Medicated and voided reps do not count toward the ladder, but are included in the rep counts.</div>`;
 }
 function progressHtml(){
-  const st0 = stateFrom(ladderEntries(), place);
-  if(st0.level < FIRST_OUT) return '';
+  const st0 = stateNow(ladderEntries(), place);
+  if(st0.level < FIRST_OUT) return `<div class="hint">The graph for ${esc(PLACE_NAME[place] || place)} appears once it reaches the front door step. To see the Home graph, set today's place to Home.</div>`;
   const s = progressSeries(liveEntries(), place);
   if(!s || s.length < 2) return s ? '<div class="hint">The graph starts on the first day of the front door step and needs a second day to draw a line.</div>' : '';
   const secOf = lv => (lv >= FIRST_OUT ? DUR[lv] : 0);
@@ -783,7 +789,7 @@ function renderMore(){
       <textarea class="note" id="aloneNote" placeholder="What happened? Dictate if you like.">${esc(a.notes || '')}</textarea>
       <button class="btn sm primary" data-action="alonesave">Save</button><button class="link" data-action="aloneclose">Cancel</button>`;
   const step = `<div class="hint">Use this once to start where she really is, or to move by hand. Earlier reps stop counting toward the ladder.</div>
-      <select class="txt" id="baseSel">${Array.from({length:TOP+1},(_,i) => `<option value="${i}" ${i===stateFrom(ladderEntries(), place).level?'selected':''}>${i+1}. ${esc(stepLabel(i))}</option>`).join('')}</select>
+      <select class="txt" id="baseSel">${Array.from({length:TOP+1},(_,i) => `<option value="${i}" ${i===stateNow(ladderEntries(), place).level?'selected':''}>${i+1}. ${esc(stepLabel(i))}</option>`).join('')}</select>
       <button class="btn sm" data-action="setbase">Set step for ${esc(PLACE_NAME[place])}</button>`;
   const notif = `<div class="hint">${pushOn ? 'On for this device.' : perm === 'denied' ? 'Blocked in iOS settings for this app.' : perm === 'unsupported' ? 'Open this from the Home Screen icon to turn them on.' : 'Off on this device.'}</div>
       ${pushOn ? '<button class="btn sm" data-action="pushtest">Send a test notification</button>' : (perm === 'denied' || perm === 'unsupported' ? '' : '<button class="btn sm primary" data-action="pushon">Turn on notifications</button>')}`;
@@ -898,7 +904,7 @@ async function saveRep(outcome){
   await flushNote();
   const date = todayStr();
   const live = ladderEntries();
-  const before = stateFrom(live, r.place);
+  const before = stateNow(live, r.place);
   const base = { v:3, id: uuid(), place:r.place, date, actualSec:r.actualSec, outcome, notes:'', createdAt: Date.now() };
   if(isMedicated()) base.medicated = true;
   let data, msg;
@@ -911,7 +917,7 @@ async function saveRep(outcome){
     if(r.byPlan) data.byPlan = true;
     if(data.medicated) msg = ['Logged as medicated.', 'It does not move your step.'];
     else {
-      const after = stateFrom(live.concat([data]), r.place);
+      const after = stateNow(live.concat([data]), r.place);
       msg = coachMsg(after.lastEvent, after);
     }
   }
@@ -1114,7 +1120,7 @@ document.addEventListener('click', ev => {
       putEntry({ v:3, id: uuid(), kind:'alone', date: todayStr(), createdAt: Date.now(), minutes: m, outcome: ui.alone.outcome, notes: $('aloneNote').value.trim(), trazodone: !!ui.alone.trazodone });
       ui.alone = null; render({ rep:true }); setStatus('Logged.'); break;
     }
-    case 'setbase': { const lv = parseInt($('baseSel').value, 10); if(!confirm('Set your step for ' + PLACE_NAME[place] + ' to: ' + stepLabel(lv) + '? Reps before now stop counting toward the ladder.')) break; putEntry({ v:3, id: uuid(), kind:'baseline', place, date: todayStr(), createdAt: Date.now(), level: lv, from: stateFrom(ladderEntries(), place).level, outcome:'baseline', notes:'' }); render({ rep:true }); setStatus('Step set.'); break; }
+    case 'setbase': { const lv = parseInt($('baseSel').value, 10); if(!confirm('Set your step for ' + PLACE_NAME[place] + ' to: ' + stepLabel(lv) + '? Reps before now stop counting toward the ladder.')) break; putEntry({ v:3, id: uuid(), kind:'baseline', place, date: todayStr(), createdAt: Date.now(), level: lv, from: stateNow(ladderEntries(), place).level, outcome:'baseline', notes:'' }); render({ rep:true }); setStatus('Step set.'); break; }
     case 'pushon': enablePush(); break;
     case 'pushtest': testPush(); break;
     case 'export': exportBackup(); break;

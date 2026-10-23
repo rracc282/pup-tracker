@@ -50,7 +50,9 @@ function fits(i, minutes){ return stepEst(i) <= minutes * 60; }
 // Slow where it matters most: the front-door step and the first real departures (steps up to 60 s).
 const GATE = 12;      // "Open and close the front door": the last step before real departures
 const GATE_DAYS = 2;  // calm reps there must come from at least this many different days
-function need(level){ return level <= 2 ? 2 : level <= 11 ? 3 : level === GATE ? 4 : DUR[level] <= 60 ? 3 : DUR[level] <= 240 ? 2 : 3; }
+function need(level){ return level <= 2 ? 2 : level <= 11 ? 3 : level === GATE ? 4 : 3; }
+// Until 22 Oct 2026, departures from 75 s to 4 min needed only 2 calm reps. Reps logged on those days are still replayed that way.
+function needV2a(level){ return level <= 2 ? 2 : level <= 11 ? 3 : level === GATE ? 4 : DUR[level] <= 60 ? 3 : DUR[level] <= 240 ? 2 : 3; }
 function capFor(level){ return level <= 5 ? 3 : level <= 11 ? 2 : level > GATE && DUR[level] <= 10 ? 2 : DUR[level] <= 60 ? 1 : DUR[level] <= 240 ? 2 : 1; }
 // The stricter rules above apply from this day on. Reps logged before it are replayed under the rules she trained with,
 // so changing the rules never rewrites her history or moves her back.
@@ -65,6 +67,8 @@ const WOBBLE_OK_FROM = '2026-10-18';
 // From this day, a day's climb on departure steps is limited: she can end the day at most this many times higher than the step she
 // started it on, and only 1 step-up on the first day back after 2 or more days without training.
 const CLIMB_FROM = '2026-10-23', CLIMB_RATIO = 1.5, AWAY_DAYS = 2;
+// From this day: 3 calm reps on every departure step, and after 7 or more days without training at Home she starts one step easier.
+const NEED3_FROM = '2026-10-23', BREAK_FROM = '2026-10-23', BREAK_DAYS = 7;
 function dayNum(d){ return Math.round(Date.parse(d + 'T00:00:00Z') / 86400000); }
 // Version of the step list. Every rep records the step list it was logged on. If steps are ever inserted, bump this number:
 // reps from an older list then keep the step they were actually on, so her position never shifts.
@@ -79,13 +83,17 @@ function sortedByDate(list){
 // A rep that has not been voided.
 function isLive(e){ return !e.voided; }
 // depList: ladder entries for ONE place, already sorted. Pure and replayable from the log.
-function computeState(depList, startLevel){
-  let level = depList.length && depList[0].level != null ? depList[0].level : startLevel, prevDate = null, alertRun = 0, alertConv = false;
+function computeState(depList, startLevel, asOf){
+  let level = depList.length && depList[0].level != null ? depList[0].level : startLevel, prevDate = null, alertRun = 0, alertConv = false, eased = null;
   const dayStart = {}, backDay = {};
   let rough = {}, dayAw = {}, run = 0, runDates = new Set(), runAwake = 0, wob = 0, wobMin = null, badStep = null, nextEasy = false, lastEvent = null, lastEasy = false;
   const adv = {}, drops = [];
   for(const e of depList){
     if((e.ladderVer == null ? LADDER_VER : e.ladderVer) !== LADDER_VER && e.level != null) level = e.level;   // reps from an older step list keep their recorded step
+    // Back after a long break (Home only): start one step easier.
+    if(prevDate != null && e.date !== prevDate && (e.place || 'home') === 'home' && e.date >= BREAK_FROM && dayNum(e.date) - dayNum(prevDate) >= BREAK_DAYS && level > 0){
+      level--; run = 0; runDates = new Set(); runAwake = 0; dayAw = {}; wob = 0; wobMin = null; alertRun = 0;
+    }
     if(dayStart[e.date] === undefined){ dayStart[e.date] = level; backDay[e.date] = prevDate != null && dayNum(e.date) - dayNum(prevDate) - 1 >= AWAY_DAYS; }
     prevDate = e.date;
     const hard = e.step >= level;
@@ -101,7 +109,7 @@ function computeState(depList, startLevel){
       wob = 0; wobMin = null;
       if(hard){
         run++; runDates.add(e.date); if(!(e.tags||[]).includes('Asleep before')){ runAwake++; dayAw[e.date] = (dayAw[e.date] || 0) + 1; }
-        const v2 = e.date >= RULES_V2_FROM, needNow = v2 ? need(level) : needV1(level), capNow = v2 ? capFor(level) : capV1(level);
+        const v2 = e.date >= RULES_V2_FROM, needNow = !v2 ? needV1(level) : (e.date >= NEED3_FROM ? need(level) : needV2a(level)), capNow = v2 ? capFor(level) : capV1(level);
         if(run >= needNow){
           const used = adv[e.date] || 0;
           if(level >= TOP){ run = 0; runDates = new Set(); runAwake = 0; dayAw = {}; lastEvent = 'top'; }
@@ -129,7 +137,12 @@ function computeState(depList, startLevel){
       { const f = level; level = Math.max(0, level - 2); run = 0; runDates = new Set(); runAwake = 0; dayAw = {}; wob = 0; wobMin = null; badStep = e.step; lastEvent = 'upset'; if(level < f) drops.push({ from: f, to: level, why: 'upset' }); }
     }
   }
-  return { level, run, runDays: level === GATE ? gateDays(dayAw) : runDates.size, gate: level === GATE, wob, nextEasy, lastEasy, lastEvent, alertConv, badStep, need: need(level), drops };
+  // Today has no rep yet and the last training day was 7 or more days ago: show the easier start already.
+  if(asOf && prevDate != null && asOf > prevDate && asOf >= BREAK_FROM && dayNum(asOf) - dayNum(prevDate) >= BREAK_DAYS && level > 0){
+    eased = { from: level, days: dayNum(asOf) - dayNum(prevDate) };
+    level--; run = 0; runDates = new Set(); runAwake = 0; dayAw = {}; wob = 0; wobMin = null; badStep = null; nextEasy = false; lastEasy = false; lastEvent = null;
+  }
+  return { eased, level, run, runDays: level === GATE ? gateDays(dayAw) : runDates.size, gate: level === GATE, wob, nextEasy, lastEasy, lastEvent, alertConv, badStep, need: need(level), drops };
 }
 
 // A "baseline" entry says: my step is N from here on (set by hand). Reps before it no longer count.
@@ -179,9 +192,9 @@ function startFor(list, place){
   if(b) return b.level;
   return 0; // every place, including a new one, starts from the first step
 }
-function stateFrom(list, place){
+function stateFrom(list, place, asOf){
   const own = depsFor(list, place);
-  const st = computeState(own, startFor(list, place));
+  const st = computeState(own, startFor(list, place), place === 'home' ? asOf : null);
   if(place !== 'home') st.newPlace = own.length === 0 && !baselineFor(list, place);
   return st;
 }
