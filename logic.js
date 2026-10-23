@@ -1,3 +1,4 @@
+const LOGIC_VERSION = '56';
 // Pure training logic. No DOM, no network. Loaded by index.html and tested in node.
 // One ladder. Steps 0-5: a cue while she watches. 6-12: cues while she is behind the closed door. 13 and up: seconds spent outside.
 // Time outside per step. Every step has a stable id ('out.<seconds>'), so inserting steps never changes saved history.
@@ -361,7 +362,7 @@ function coachMsg(ev, st){
       return ['Calm.', (st.need - st.run) + ' more calm in a row at this step and you move up.' + (st.level >= 2 ? ' Some reps in between are easier on purpose and do not count.' : '')];
     case 'easyOk': return ['Good.', 'Easier reps keep her confident. They do not count toward moving up.'];
     case 'roughDay': return ['Calm, but not a step-up day.', 'She had an upset earlier today, so you stay at this step and move up tomorrow.'];
-    case 'capped': return ['Calm, and you are at today\'s step-up limit.', 'More reps today stay at this step.'];
+    case 'capped': return ['Calm. No more step-ups today.', 'More reps at this step are fine, up to today\'s limit. Some will be shorter on purpose.'];
     case 'awake': return ['Calm, but she was asleep.', 'From the front door on, some of the calm reps need to happen while she is awake, so she actually notices the cue. Do the next rep while she is awake or dozing.'];
     case 'gate': return ['Calm, but not yet.', 'The front door is the last step before real departures. It needs at least 2 calm reps with her awake or dozing on each of two different days, so come back tomorrow.'];
     case 'alert': return ['Alert.', 'Quiet, but she showed early stress signs. This rep does not count and your count stays. Repeat this step. A second alert in a row counts as a wobble.'];

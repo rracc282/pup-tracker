@@ -1,6 +1,6 @@
 // Churro tracker app. Uses logic.js (pure) and Supabase (sync + push queue).
 'use strict';
-const APP_VERSION = '55';
+const APP_VERSION = '56';
 const CFG = window.PT_CONFIG || {};
 const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -518,7 +518,7 @@ function bannersHtml(step){
   if(last && last.outcome === 'escalated'){
     h += `<div class="banner upset">She had a rough rep today. Pausing until tomorrow is a good call.</div>`;
   } else if(!isMedicated() && stateNow(ladderEntries(), place).lastEvent === 'capped' && last && last.date === todayStr()){
-    h += `<div class="banner info">She has earned every step-up allowed today. Stopping here is a good call. Extra reps today only repeat this step.</div>`;
+    h += `<div class="banner info">No more step-ups today. More reps at this step are fine, up to today's limit. Some will be shorter on purpose.</div>`;
   } else if(capReached(step)){
     h += `<div class="banner info">That is enough ${isQuick(step) ? 'short' : 'longer'} reps for today (${catLimit(step)}). More will not speed things up. Rest blocks still help.</div>`;
   }
@@ -537,7 +537,9 @@ function bannersHtml(step){
 }
 
 // Optional pacing helpers (saved on this device, on by default).
-function optOn(k){ return lsGet('pt-opt-' + k) !== '0'; }
+// Pacing helpers. "Two sessions a day" is off unless she turns it on; the daily rep limits are what end the day.
+const OPT_DEFAULT_OFF = { '2s': 1 };
+function optOn(k){ const v = lsGet('pt-opt-' + k); return v == null ? !OPT_DEFAULT_OFF[k] : v !== '0'; }
 function eveningStop(){
   if(!optOn('eve') || lsGet('pt-eve-ok') === todayStr()) return false;
   const d = new Date(); return d.getHours() * 60 + d.getMinutes() >= 20 * 60 + 30;
@@ -560,6 +562,7 @@ function closeDay(){ lsSet('pt-closed', todayStr()); qCancelKind('ready'); }
 function reopenDay(){ try{ localStorage.removeItem('pt-closed'); }catch(e){} scheduleReady(); render({ rep:true }); }
 function renderRep(){
   const el = $('repCard');
+  $('eodBtn').hidden = false;
   const r = ui.rep;
   if(ui.mode === 'idle' && isClosedToday()){
     el.innerHTML = (ui.feedback ? feedbackHtml() : '') + `<div class="eyebrow">Rest mode</div>
@@ -590,6 +593,16 @@ function renderRep(){
     const fitN = pocketMatters(st) ? Math.min(SESSION_MAX, capLeft, Math.max(1, Math.floor(pocket * 60 / (stepEst(nx.step) + gapSec(nx.step))))) : 1;
     const blocked = (!!waitInfo() || capReached(nx.step)) && !ui.override;
     const keep = ui.feedback ? feedbackHtml() : '';
+    const done = capReached(nx.step) && !ui.override && !isMedicated();
+    $('eodBtn').hidden = done;
+    if(done){
+      el.innerHTML = keep + `<div class="eyebrow">Day complete</div>
+        <div class="rep-label">That is enough for today</div>
+        <div class="rep-sub">You reached today's limit of ${catLimit(nx.step)} ${isQuick(nx.step) ? 'short' : 'longer'} reps. More will not speed things up.</div>
+        <button class="btn primary" data-action="eod">End of day summary</button>
+        <div class="link-row"><button class="link" data-action="override">Keep training anyway</button></div>`;
+      return;
+    }
     el.innerHTML = keep + bannersHtml(nx.step) +
       `<div class="tapbox" data-action="togglesteps" role="button" tabindex="0" aria-expanded="${!!ui.showSteps}">
          <div class="eyebrow">${nx.kind === 'warmup' ? 'Warm-up rep' : 'Next rep'}</div>
@@ -644,6 +657,7 @@ function renderRep(){
         <button class="out escalated" data-out="escalated"><b>Upset</b><span>${esc(oh.escalated)}</span></button>
       </div>
       ${r.kind === 'dep' && r.step >= FIRST_OUT && !r.byPlan && r.actualSec > DUR[r.step] && DUR[r.step] <= 300 ? `<div class="link-row"><button class="link" data-action="useplan">Timer ran long? Log the planned ${esc(fmtSec(DUR[r.step]))} instead</button></div>` : ''}
+      ${r.kind === 'dep' && r.step >= FIRST_OUT && !r.byPlan && !r.early && r.actualSec < DUR[r.step] * 0.6 ? `<div class="link-row"><button class="link" data-action="useplan">You tapped back after ${esc(fmtSec(r.actualSec))}. Stayed out the full ${esc(fmtSec(DUR[r.step]))}? Log that instead</button></div>` : ''}
       <div class="hint" style="margin-top:8px">Unsure between two? Pick the harder one. It protects her progress.</div>
       <div class="link-row"><button class="link" data-action="discard">Discard this rep</button></div>`;
   }
@@ -799,7 +813,7 @@ function renderMore(){
       ${pushOn ? '<button class="btn sm" data-action="pushtest">Send a test notification</button>' : (perm === 'denied' || perm === 'unsupported' ? '' : '<button class="btn sm primary" data-action="pushon">Turn on notifications</button>')}`;
   const pace = `<div class="hint">Gentle limits that show a "wind down" card instead of the next rep. You can always tap "Keep training" to carry on.</div>
       <div class="toggle"><div><b>Evening stop at 20:30</b></div><button class="chip" data-action="opttoggle" data-opt="eve" aria-pressed="${optOn('eve')}">${optOn('eve') ? 'On' : 'Off'}</button></div>
-      <div class="toggle"><div><b>Two sessions a day</b><span class="hint">From the front door step up.</span></div><button class="chip" data-action="opttoggle" data-opt="2s" aria-pressed="${optOn('2s')}">${optOn('2s') ? 'On' : 'Off'}</button></div>`;
+      <div class="toggle"><div><b>Stop after two sessions</b><span class="hint">Off by default. The daily rep limits end the day.</span></div><button class="chip" data-action="opttoggle" data-opt="2s" aria-pressed="${optOn('2s')}">${optOn('2s') ? 'On' : 'Off'}</button></div>`;
   const backup = `<button class="btn sm" data-action="export">Download backup</button>
       <label class="btn sm" style="text-align:center">Import a backup file<input type="file" id="importFile" accept="application/json,.json" hidden></label>`;
   $('moreList').innerHTML =
@@ -810,7 +824,7 @@ function renderMore(){
     moreSec('notif', 'Notifications', notif) +
     moreSec('backup', 'Backup and import', backup) +
     `<div class="status" id="dbStatus"></div>
-    <div class="status">App version ${APP_VERSION}</div>
+    <div class="status">App version ${APP_VERSION}${typeof LOGIC_VERSION !== 'undefined' && LOGIC_VERSION !== APP_VERSION ? ' · rules file ' + LOGIC_VERSION + '. Close the app completely and open it again to update.' : ''}</div>
     <button class="btn sm" data-action="signout">Sign out</button>`;
 }
 document.addEventListener('toggle', ev => { const d = ev.target; if(d && d.classList && d.classList.contains('msec')){ ui.moreOpen = ui.moreOpen || {}; ui.moreOpen[d.dataset.sec] = d.open; } }, true);
@@ -939,13 +953,15 @@ async function scheduleForgot(r, planSec){
   const id = await qInsert({ fire_at: new Date(r.startedAt + (planSec + 20 * 60) * 1000).toISOString(), kind:'forgot', tag:'forgot', title:rnd(FORGOT_MSGS)[0], body:'', open:'' });
   if(id && ui.rep && ui.rep === r){ r.forgotId = id; saveActive(); }
 }
+// Steps up to this many seconds have no timer: she counts, the planned time is logged.
+const UNTIMED_MAX = 30;
 function startRep(step){
   flushNote();
   ui.feedback = null; ui.override = false;
   qCancelKind('ready');
   const rep = { kind:'dep', step, place, startedAt:null, alerted:false, pre: ui.pre || null };
   ui.pre = null;
-  if(step >= FIRST_OUT && DUR[step] > 10){ ui.mode = 'prep'; ui.rep = rep; }
+  if(step >= FIRST_OUT && DUR[step] > UNTIMED_MAX){ ui.mode = 'prep'; ui.rep = rep; }
   else if(step >= FIRST_OUT){ rep.untimed = true; rep.startedAt = Date.now(); ui.mode = 'run'; ui.rep = rep; scheduleForgot(rep, 60); }
   else { rep.startedAt = Date.now(); ui.mode = 'run'; ui.rep = rep; primeAudio(); startTicking(); scheduleForgot(rep, 60); }
   saveActive(); render({ rep:true });
