@@ -1,6 +1,6 @@
 // Churro tracker app. Uses logic.js (pure) and Supabase (sync + push queue).
 'use strict';
-const APP_VERSION = '54';
+const APP_VERSION = '55';
 const CFG = window.PT_CONFIG || {};
 const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -44,7 +44,7 @@ const PRE_STATES = [['Awake before','Awake'],['Asleep before','Asleep']];
 const TAG_LABEL = { 'Dozing before':'Dozing', 'Asleep before':'Asleep', 'Awake before':'Awake', 'Settled under 10 s':'Under 10 s', 'Settled under 1 min':'Under 1 min', 'Took over 1 min':'Over 1 min', '@walked':'Walked first' };
 const REACTION_TAGS_OLD = ['Asleep before','Awake before','Head up','Stood up','Followed me','Went to the door','Vocalised','Settled under 10 s','Settled under 1 min','Took over 1 min','Outside noise'];
 const SPOTS = ['Sofa','Bed','Crate','Floor'];
-const DAY_TYPES = [['home','Home','Most of the day at home. Room for up to 10 longer reps.'],['sitter','Sitter','Sitter has her. Up to 5 longer reps, plenty of quick ones.'],['weekend','Weekend','We may be out a lot. Up to 8 longer reps. Gentle.'],['rest','Rest day','No training today. She just relaxes. Days off help both of you.']];
+const DAY_TYPES = [['home','Home','Most of the day at home. Room for up to 10 longer reps.'],['sitter','Sitter','Sitter has her. Up to 5 longer reps, plenty of short ones.'],['weekend','Weekend','We may be out a lot. Up to 8 longer reps. Gentle.'],['rest','Rest day','No training today. She just relaxes. Days off help both of you.']];
 
 // ---------- state ----------
 let sb = null, session = null;
@@ -520,7 +520,7 @@ function bannersHtml(step){
   } else if(!isMedicated() && stateNow(ladderEntries(), place).lastEvent === 'capped' && last && last.date === todayStr()){
     h += `<div class="banner info">She has earned every step-up allowed today. Stopping here is a good call. Extra reps today only repeat this step.</div>`;
   } else if(capReached(step)){
-    h += `<div class="banner info">That is enough ${isQuick(step) ? 'quick' : 'longer'} reps for today (${catLimit(step)}). More will not speed things up. Rest blocks still help.</div>`;
+    h += `<div class="banner info">That is enough ${isQuick(step) ? 'short' : 'longer'} reps for today (${catLimit(step)}). More will not speed things up. Rest blocks still help.</div>`;
   }
   if(!todays.length && !isMedicated()){
     const sn = stateNow(ladderEntries(), place);
@@ -660,13 +660,15 @@ function renderToday(){
   const outN = deps.length - cueN;
   const rests = liveEntries().filter(e => e.kind === 'rest' && e.date === t).length;
   $('restBtn').disabled = ui.mode !== 'idle';
-  $('todayCard').innerHTML = `<h2>Today</h2>
-    <div class="stats">
-      <span>Quick reps <b>${cueN}</b> of ${QUICK_CEILING}</span>
-      <span>Longer reps <b>${outN}</b> of ${ceilingFor(new Date(), dayType())}</span>
-      <span>Calm <b>${c}</b></span>${al ? `<span>Alert <b>${al}</b></span>` : ''}<span>Wobble <b>${w}</b></span><span>Upset <b>${u}</b></span>
-      <span>Rest blocks <b>${rests}</b></span>
+  const st = stateNow(ladderEntries(), place);
+  const showLong = outN > 0 || (st.level >= FIRST_OUT && DUR[st.level] > 60);
+  const tile = (label, n) => `<div class="tile"><b>${n}</b><span>${label}</span></div>`;
+  $('todayCard').innerHTML = `<div class="eyebrow">Today</div>
+    <div class="budget">
+      <div class="bud"><span>Short reps <i>(up to 1 min)</i></span><b>${cueN} <em>of ${QUICK_CEILING}</em></b></div>
+      ${showLong ? `<div class="bud"><span>Longer reps <i>(over 1 min)</i></span><b>${outN} <em>of ${ceilingFor(new Date(), dayType())}</em></b></div>` : ''}
     </div>
+    <div class="tiles">${tile('Calm', c)}${tile('Alert', al)}${tile('Wobble', w)}${tile('Upset', u)}${tile('Rests', rests)}</div>
 `;
 }
 
@@ -772,7 +774,7 @@ function progressHtml(){
   const cap1 = `<b>${esc(fmtDay(selP.date).replace(/\/\d{4}$/, ''))}</b> · ${esc(stepLabel(selP.start).replace(/^Out for /, ''))}${selP.end > selP.start ? ' → ' + esc(stepLabel(selP.end).replace(/^Out for /, '')) : selP.end < selP.start ? ' → ' + esc(stepLabel(selP.end).replace(/^Out for /, '')) + ' (stepped back)' : ''} · best calm ${selP.maxCalm == null ? 'none' : nm(selP.maxCalm)} · ${selP.reps} rep${selP.reps === 1 ? '' : 's'} (${selP.calm} calm${selP.alert ? ', ' + selP.alert + ' alert' : ''}${selP.mild ? ', ' + selP.mild + ' wobble' + (selP.mild === 1 ? '' : 's') : ''}${selP.esc ? ', ' + selP.esc + ' upset' + (selP.esc === 1 ? '' : 's') : ''})${why}`;
   return `<div class="pgwrap" role="img" aria-label="${esc(desc)}"><svg class="pgaxis" viewBox="0 0 50 ${H}" width="50" height="${H}">${axis}</svg><div class="pgscroll"><svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}">${band}${grid}${xa}${segs}${stems}${cdots}${wdots}${tri}${hits}</svg></div></div>
     <div class="progcap" aria-live="polite">${cap1}</div>
-    <div class="legend"><span><i class="lg-dot"></i>Working step</span><span><i class="lg-dia"></i>Longest calm rep</span><span><i class="lg-tri"></i>Started easier</span></div>
+    <div class="legend"><span><i class="lg-dot"></i>Working step</span><span><i class="lg-dia"></i>Longest calm</span><span><i class="lg-tri"></i>Started easier</span></div>
 `;
 }
 function moreSec(id, title, body, forceOpen){

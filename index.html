@@ -44,8 +44,8 @@
   .progcap{font-size:12.5px;color:var(--ink-2);line-height:1.4;margin:4px 0 2px;min-height:2.8em;}
   .progcap b{color:var(--ink);font-weight:600;}
   .lg-tri{width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-top:8px solid var(--wobble);display:inline-block;}
-  .legend{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:12px;color:var(--ink-2);margin:6px 0 4px;}
-  .legend span{display:inline-flex;align-items:center;gap:6px;}
+  .legend{display:flex;flex-wrap:nowrap;justify-content:space-between;gap:6px;font-size:11px;color:var(--ink-2);margin:6px 0 4px;white-space:nowrap;}
+  .legend span{display:inline-flex;align-items:center;gap:4px;}
   .lg-dot{width:10px;height:10px;border-radius:50%;background:var(--calm);display:inline-block;}
   .lg-dia{width:8px;height:8px;border:1.6px solid var(--ink);background:var(--surface);transform:rotate(45deg);display:inline-block;}
   @media (prefers-color-scheme: dark){
@@ -190,8 +190,15 @@
   .out.escalated{border-color:var(--upset);background:var(--upset-bg);}
 
   /* today */
-  .stats{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:14px;margin-bottom:12px;}
-  .stats b{font-family:var(--font-mono);font-weight:500;}
+  .budget{display:flex;flex-direction:column;gap:6px;margin-bottom:10px;}
+  .bud{display:flex;justify-content:space-between;align-items:baseline;font-size:14px;}
+  .bud i{font-style:normal;color:var(--ink-2);font-size:12.5px;}
+  .bud b{font-family:var(--font-mono);font-weight:500;}
+  .bud em{font-style:normal;color:var(--ink-2);font-size:12.5px;}
+  .tiles{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-bottom:12px;}
+  .tile{border:1px solid var(--line);border-radius:10px;padding:6px 2px 5px;text-align:center;display:flex;flex-direction:column;gap:1px;}
+  .tile b{font-family:var(--font-mono);font-weight:500;font-size:17px;line-height:1.2;}
+  .tile span{font-size:11px;color:var(--ink-2);}
   .counter{display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap;}
   .counter .n{font-family:var(--font-mono);font-size:26px;min-width:2ch;text-align:center;}
   .counter button{width:48px;height:48px;border-radius:12px;border:1px solid var(--line);background:var(--bg);font-size:22px;font-weight:700;}
@@ -345,7 +352,7 @@
     <div class="stack">
       <div id="progCard" hidden></div>
       <div id="todayCard"></div>
-      <details id="logCard">
+      <details id="logCard" class="msec">
         <summary>Log</summary>
         <div id="logList"></div>
       </details>
@@ -401,7 +408,7 @@
 
       <h3>Limits and days</h3>
       <ul>
-        <li>Each day: 15 quick reps (cues and steps up to 1 minute) plus 10 longer reps on home days, 8 on weekends and 5 on sitter days. After 20:30 or a second session, a wind-down card appears (tap "Keep training" to carry on). "Rest day" and "End of day summary" stop the day's training.</li>
+        <li>Each day: 15 short reps (cues and steps up to 1 minute) plus 10 longer reps on home days, 8 on weekends and 5 on sitter days. After 20:30 or a second session, a wind-down card appears (tap "Keep training" to carry on). "Rest day" and "End of day summary" stop the day's training.</li>
         <li>Every morning, pick the day type and where you are. Each place has its own ladder. "Set my step" in More moves her by hand.</li>
         <li><b>Never moves the ladder:</b> rest blocks, real alone time, medicated days, voided reps, and reps with your partner staying home.</li>
       </ul>
@@ -419,9 +426,9 @@
 <dialog id="stepsSheet"><div class="stack" id="stepsBody"></div></dialog>
 <dialog id="eodSheet"><div class="stack" id="eodBody"></div></dialog>
 
-<script src="config.js?v=54"></script>
-<script src="supabase.js?v=54"></script>
-<script src="logic.js?v=54"></script>
-<script src="app.js?v=54"></script>
+<script src="config.js?v=55"></script>
+<script src="supabase.js?v=55"></script>
+<script src="logic.js?v=55"></script>
+<script src="app.js?v=55"></script>
 </body>
 </html>
