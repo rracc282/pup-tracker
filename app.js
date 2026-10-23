@@ -1,6 +1,6 @@
 // Churro tracker app. Uses logic.js (pure) and Supabase (sync + push queue).
 'use strict';
-const APP_VERSION = '51';
+const APP_VERSION = '52';
 const CFG = window.PT_CONFIG || {};
 const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -26,7 +26,7 @@ function uuid(){
 
 const PLACES = [['home','Home'],['zurich','Zurich'],['other','Elsewhere']];
 const PLACE_NAME = { home:'Home', zurich:'Zurich', other:'Elsewhere' };
-const OUT_NAME = { calm:'Calm', mild:'Wobble', escalated:'Upset' };
+const OUT_NAME = { calm:'Calm', alert:'Alert', mild:'Wobble', escalated:'Upset' };
 const POCKET_TAGS = ['Coffee','Shower','Bins','Cooking','Call','Evening','Other'];
 const TAG_GROUPS = [
   ['Before I left', ['Awake before','Asleep before','@walked','Chew given']],
@@ -400,18 +400,21 @@ const CUE_TXT_DOOR = [
   'Coat on, shoes on, bag up, keys up, press the bolt. Then undo it all.'];
 const OUTCOME_HELP = {
   cue: {
-    calm: 'Ignores the cue, or glances or lifts her head, and is resting again within about 10 seconds.',
-    mild: 'Gets up, walks to you or the door, stares at it, or gives a whimper or one or two barks. Lies back down on her own within about a minute.',
+    calm: 'Ignores the cue, or glances or lifts her head, and is resting again within about 10 seconds. No stress signs.',
+    alert: 'Stands up, shifts around or stares at the cue, or shows a stress sign (yawning, lip licking, a tense body), but makes no sound and does not go to the door. Settled again on her own within about 30 seconds.',
+    mild: 'Walks to you or the door, or gives a whimper or one or two barks. Lies back down on her own within about a minute.',
     escalated: 'Keeps barking, howling or whining past a few seconds, scratches the door, paces, pants hard or trembles, or is not settled after a minute.'
   },
   out: {
-    calm: 'No sound, no door-watching or pacing the whole time. She rests, chews or sleeps. A glance at the door is fine. She greets you normally when you come back. Check the Furbo recording if you could not watch live.',
-    mild: 'A few seconds of whining, a bark or two, or standing at the door, then she settles by herself before you are back. Or a clearly over-excited greeting.',
+    calm: 'Rests, chews or sleeps. Lifting her head or a glance at the door is fine. No sound, no pacing, no stress signs. She greets you normally. Check the Furbo recording if you could not watch live.',
+    alert: 'Quiet, but not fully relaxed: stands up or moves a few steps without going to the door, stares at it, or shows a stress sign (yawning, lip licking, a tense body, heavier breathing). No sound, no pacing, and she settles again by herself.',
+    mild: 'A few seconds of whining, a bark or two, or going to the door and staying there, then she settles by herself before you are back. Or a clearly over-excited greeting.',
     escalated: 'Barking, howling or whining that continues, scratching, pacing, heavy panting or drooling, trembling, or you came back early because it was building.'
   },
   rest: {
-    calm: 'Rests, chews or sleeps. A glance or a short whimper is fine.',
-    mild: 'Stands at the door or whines for a short while, then settles by herself.',
+    calm: 'Rests, chews or sleeps. A glance is fine.',
+    alert: 'Quiet, but stands up or stares at the door, then settles by herself.',
+    mild: 'Goes to the door or whines for a short while, then settles by herself.',
     escalated: 'Keeps barking or scratching, or does not settle.'
   }
 };
@@ -420,9 +423,10 @@ function helpHtml(step){
   return `<details class="help"><summary>What counts as calm, wobble, upset?</summary>
     <ul class="help-list">
       <li><b>Calm.</b> ${esc(h.calm)}</li>
+      <li><b>Alert.</b> ${esc(h.alert)}</li>
       <li><b>Wobble.</b> ${esc(h.mild)}</li>
       <li><b>Upset.</b> ${esc(h.escalated)}</li>
-      <li><b>Unsure?</b> Pick the harder label. It protects her progress.</li>
+      <li><b>Unsure?</b> Pick the harder label. It protects her progress. An Alert does not count toward moving up and does not reset your count. A second one in a row counts as a wobble.</li>
       <li><b>Stress signs.</b> Lip licking, yawning when not tired, whites of the eyes showing, ears pinned back, tucked tail, panting when it is not hot, trembling.</li>
     </ul></details>`;
 }
@@ -626,6 +630,7 @@ function renderRep(){
       <h2>How was she?</h2>
       <div class="outs">
         <button class="out calm" data-out="calm"><b>Calm</b><span>${esc(oh.calm)}</span></button>
+        <button class="out alert" data-out="alert"><b>Alert</b><span>${esc(oh.alert)}</span></button>
         <button class="out mild" data-out="mild"><b>Wobble</b><span>${esc(oh.mild)}</span></button>
         <button class="out escalated" data-out="escalated"><b>Upset</b><span>${esc(oh.escalated)}</span></button>
       </div>
@@ -639,6 +644,7 @@ function renderToday(){
   const t = todayStr();
   const deps = todayDeps();
   const c = deps.filter(e => e.outcome === 'calm').length;
+  const al = deps.filter(e => e.outcome === 'alert').length;
   const w = deps.filter(e => e.outcome === 'mild').length;
   const u = deps.filter(e => e.outcome === 'escalated').length;
   const cueN = deps.filter(e => isQuick(e.step)).length;
@@ -649,7 +655,7 @@ function renderToday(){
     <div class="stats">
       <span>Quick reps <b>${cueN}</b> of ${QUICK_CEILING}</span>
       <span>Longer reps <b>${outN}</b> of ${ceilingFor(new Date(), dayType())}</span>
-      <span>Calm <b>${c}</b></span><span>Wobble <b>${w}</b></span><span>Upset <b>${u}</b></span>
+      <span>Calm <b>${c}</b></span>${al ? `<span>Alert <b>${al}</b></span>` : ''}<span>Wobble <b>${w}</b></span><span>Upset <b>${u}</b></span>
       <span>Rest blocks <b>${rests}</b></span>
     </div>
 `;
@@ -678,7 +684,7 @@ function renderLog(){
     if(editing){
       const sure = ui.confirmDel === e.id;
       edit = `<div class="edit">
-        <div class="chips" role="group" aria-label="Outcome">${['calm','mild','escalated'].map(o => `<button class="chip" data-setout="${o}" data-id="${esc(e.id)}" aria-pressed="${e.outcome===o}">${OUT_NAME[o]}</button>`).join('')}</div>
+        <div class="chips" role="group" aria-label="Outcome">${['calm','alert','mild','escalated'].map(o => `<button class="chip" data-setout="${o}" data-id="${esc(e.id)}" aria-pressed="${e.outcome===o}">${OUT_NAME[o]}</button>`).join('')}</div>
         <textarea class="note" id="editNote" maxlength="800">${esc(e.notes || '')}</textarea>
         <button class="btn sm primary" data-action="editsave" data-id="${esc(e.id)}">Save</button>
         <button class="btn sm" data-action="del" data-id="${esc(e.id)}">${sure ? 'Sure? Delete for good' : 'Delete for good'}</button>
@@ -704,6 +710,7 @@ function weekHtml(){
       ${row('Training days', w.cur.days, w.prev.days)}
       ${row('Reps', w.cur.reps, w.prev.reps)}
       ${row('Calm', pct(w.cur), pct(w.prev))}
+      ${w.cur.alert || w.prev.alert ? row('Alerts', w.cur.alert, w.prev.alert) : ''}
       ${row('Wobbles', w.cur.mild, w.prev.mild)}
       ${row('Upsets', w.cur.esc, w.prev.esc)}
       ${row('Step change', diff(w.cur), diff(w.prev))}
@@ -754,7 +761,7 @@ function progressHtml(){
   const best = Math.max.apply(null, s.map(p => p.maxCalm == null ? -1 : p.maxCalm));
   const desc = `Working step over time. Now: ${stepLabel(last.end)}.` + (best >= 0 ? ` Longest calm rep so far: ${best === 0 ? 'front door only' : fmtSec(best)}.` : '');
   const calmTxt = sel.maxCalm == null ? 'no calm departure' : sel.maxCalm === 0 ? 'front door only' : fmtSec(sel.maxCalm);
-  const detail = `<div class="progday"><b>${esc(fmtDay(sel.date))}</b><div>Started the day at <b>${esc(stepLabel(sel.start))}</b>${sel.end > sel.start ? `, finished at <b>${esc(stepLabel(sel.end))}</b>` : sel.end < sel.start ? `, finished back at ${esc(stepLabel(sel.end))}` : ''}.</div><div>Longest calm rep: ${esc(calmTxt)}. ${sel.reps} rep${sel.reps === 1 ? '' : 's'}: ${sel.calm} calm, ${sel.mild} wobble${sel.mild === 1 ? '' : 's'}, ${sel.esc} upset${sel.esc === 1 ? '' : 's'}.</div></div>`;
+  const detail = `<div class="progday"><b>${esc(fmtDay(sel.date))}</b><div>Started the day at <b>${esc(stepLabel(sel.start))}</b>${sel.end > sel.start ? `, finished at <b>${esc(stepLabel(sel.end))}</b>` : sel.end < sel.start ? `, finished back at ${esc(stepLabel(sel.end))}` : ''}.</div><div>Longest calm rep: ${esc(calmTxt)}. ${sel.reps} rep${sel.reps === 1 ? '' : 's'}: ${sel.calm} calm, ${sel.alert ? sel.alert + ' alert, ' : ''}${sel.mild} wobble${sel.mild === 1 ? '' : 's'}, ${sel.esc} upset${sel.esc === 1 ? '' : 's'}.</div></div>`;
   return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(desc)}" style="width:100%;height:auto">${g}${xa}${selLine}<polyline points="${wpts}" fill="none" stroke="var(--calm)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>${cdots}${wdots}${hits}</svg>
     <div class="legend"><span><i class="lg-dot"></i>Working step that day</span><span><i class="lg-dia"></i>Longest calm rep that day</span></div>
     ${detail}<div class="hint">Tap a day on the graph to see it.</div>
@@ -772,7 +779,7 @@ function renderMore(){
   if(!a) alone = `<div class="hint">For absences outside training (a sitter cancelled, an errand). It never changes your step.</div><button class="btn sm" data-action="aloneopen">Log time she was really alone</button>`;
   else alone = `<div class="hint">For absences outside training (a sitter cancelled, an errand). It never changes your step.</div>
       <input class="txt" id="aloneMin" type="number" inputmode="numeric" min="1" placeholder="Minutes" value="${esc(a.minutes || '')}">
-      <div class="chips">${['calm','mild','escalated'].map(o => `<button class="chip" data-aout="${o}" aria-pressed="${a.outcome===o}">${OUT_NAME[o]}</button>`).join('')}<button class="chip" data-action="alonetraz" aria-pressed="${!!a.trazodone}">Trazodone given</button></div>
+      <div class="chips">${['calm','alert','mild','escalated'].map(o => `<button class="chip" data-aout="${o}" aria-pressed="${a.outcome===o}">${OUT_NAME[o]}</button>`).join('')}<button class="chip" data-action="alonetraz" aria-pressed="${!!a.trazodone}">Trazodone given</button></div>
       <textarea class="note" id="aloneNote" placeholder="What happened? Dictate if you like.">${esc(a.notes || '')}</textarea>
       <button class="btn sm primary" data-action="alonesave">Save</button><button class="link" data-action="aloneclose">Cancel</button>`;
   const step = `<div class="hint">Use this once to start where she really is, or to move by hand. Earlier reps stop counting toward the ladder.</div>

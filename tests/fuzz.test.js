@@ -16,13 +16,15 @@ for(let run=0;run<600;run++){
     check(st.level>=0&&st.level<=TOP,'level out of range',{lvl:st.level});
     if(i%15===14){ t+=86400000; }
     t+=600000+Math.floor(rnd()*3000000);
-    const r=rnd(); const out=r<pFail?(rnd()<pUp*5?'escalated':'mild'):'calm';
+    const r=rnd(); const out=r<pFail?(rnd()<pUp*5?'escalated':'mild'):(rnd()<0.1?'alert':'calm');
     const e={id:'f'+run+'_'+i,kind:'dep',place:'home',date:new Date(t).toISOString().slice(0,10),step:pk.step,outcome:out,createdAt:t};
     list.push(e);
     const nx=L.computeState(list,start);
     if(out!=='calm') check(nx.level<=st.level,'level rose on a non-calm rep',{from:st.level,to:nx.level,out});
     if(out==='calm') check(nx.level<=st.level+1,'jumped more than one step',{from:st.level,to:nx.level});
     if(out==='calm'&&pk.step<st.level) check(nx.level===st.level,'advanced on an easier rep',{lvl:st.level,step:pk.step,to:nx.level});
+    if(out==='alert'&&nx.lastEvent==='alert') check(nx.level===st.level&&nx.run===st.run,'alert changed level or count',{from:st.level,run:st.run,to:nx.level,r2:nx.run});
+    if(out==='alert'&&nx.lastEvent!=='alert') check(nx.alertConv===true,'second alert not treated as wobble',{ev:nx.lastEvent});
     if(out==='escalated') check(nx.level===Math.max(0,st.level-2),'upset drop not 2',{from:st.level,to:nx.level});
     if(out==='mild'&&nx.lastEvent==='wobbleDrop'){ check(st.level===0?nx.level===0:(nx.level<=st.level-1&&nx.level>=Math.max(0,st.level-2)),'wobble drop outside 1-2',{from:st.level,to:nx.level}); check(nx.level<=Math.max(0,pk.step)||nx.level===st.level-2||nx.level===0,'working step above where she wobbled (beyond the 2-step cap)',{lvl:nx.level,step:pk.step,from:st.level}); }
     if(out==='mild'&&nx.lastEvent==='wobble') check(nx.level===st.level,'single wobble changed level',{from:st.level,to:nx.level});

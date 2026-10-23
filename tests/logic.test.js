@@ -337,3 +337,31 @@ console.log('logic tests (daily climb limit) ok');
   assert.strictEqual(s.find(x=>x.date==='2026-10-21').start,i10);
 }
 console.log('logic tests (graph series) ok');
+
+{
+  const id=()=>Math.random()+'', mk=(step,level,outcome,ts,date)=>({kind:'dep',place:'home',id:id(),step,level,outcome,date:date||'2026-11-12',createdAt:ts});
+  const s=L.DUR.indexOf(10), T=Date.parse('2026-11-12T09:00:00Z');
+  // Alert: does not count, does not reset the run, next rep repeats the working step; a second alert in a row is a wobble
+  const base=[mk(s,s,'calm',T),mk(s,s,'calm',T+1e6)];
+  let st=L.computeState(base.concat([mk(s,s,'alert',T+2e6)]),0);
+  assert.strictEqual(st.lastEvent,'alert'); assert.strictEqual(st.run,2); assert.strictEqual(st.level,s);
+  const pk=L.pickNext(st,60,'x1'); assert.strictEqual(pk.kind,'hard'); assert.strictEqual(pk.step,s);
+  st=L.computeState(base.concat([mk(s,s,'alert',T+2e6),mk(s,s,'calm',T+3e6)]),0); assert.strictEqual(st.level,s+1); // the alert did not reset the run
+  st=L.computeState(base.concat([mk(s,s,'alert',T+2e6),mk(s,s,'alert',T+3e6)]),0);
+  assert.strictEqual(st.alertConv,true); assert.strictEqual(st.run,0); assert.strictEqual(st.lastEvent,'wobble');
+  assert.strictEqual(L.coachMsg('wobble',st)[0],'Second alert in a row.');
+  // a calm rep between two alerts keeps them apart
+  st=L.computeState([mk(s,s,'alert',T),mk(s,s,'calm',T+1e6),mk(s,s,'alert',T+2e6)],0); assert.strictEqual(st.lastEvent,'alert'); assert.strictEqual(st.alertConv,false);
+  // alerts are not upsets in the summary or the help triggers
+  const ent=[mk(s,s,'alert',T),mk(s,s,'alert',T+1e6),mk(s,s,'alert',T+2e6)];
+  assert.strictEqual(L.helpAlerts(ent,'2026-11-12','home').length,0);
+  const sum=L.buildSummary(ent,{},'2026-11-12','home'); assert(/0 upset/.test(sum)); assert(/alert/i.test(sum));
+  assert.strictEqual(L.windowStats(ent,'home','2026-11-12','2026-11-12').alert,3);
+  // warm-ups: two on the first day at a step she has never done a rep at
+  const T2=Date.parse('2026-11-13T09:00:00Z');
+  const prev=[mk(s,s,'calm',T-1800000)];
+  const stn=L.computeState(prev,0); assert.strictEqual(L.warmupPlan(prev,stn,T2).of,1); // she has done reps at 10 s: one warm-up
+  const prev2=[mk(s-1,s-1,'calm',T-3600000),mk(s-1,s-1,'calm',T-1800000),mk(s-1,s-1,'calm',T-900000)];
+  const stn2=L.computeState(prev2,0); assert.strictEqual(stn2.level,s); assert.deepStrictEqual(L.warmupPlan(prev2,stn2,T2),{no:1,of:2}); // new step: two
+}
+console.log('logic tests (alert, new-step warm-ups) ok');
