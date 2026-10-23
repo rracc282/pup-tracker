@@ -415,16 +415,19 @@ function windowStats(entries, place, from, to){
 function weekCompare(entries, date, place){
   return { cur: windowStats(entries, place, dateAdd(date, -6), date), prev: windowStats(entries, place, dateAdd(date, -13), dateAdd(date, -7)) };
 }
-// End-of-day working step per day, only once real departures have started.
+// One point per training day, only once real departures have started.
+// start = the working step she began the day on (what she was asked to do), end = where she finished it (after any step-up).
 function progressSeries(entries, place){
   if(!entries.some(e => e.kind === 'dep' && isLive(e) && e.step >= FIRST_OUT)) return null;
   const mine = depsFor(entries, place);
   if(!mine.length) return null;
+  const first = mine[0].level != null ? mine[0].level : startFor(entries, place);
   const lv = levelsAfter(mine, startFor(entries, place));
   const byDay = new Map();
   mine.forEach((e, i) => {
-    const d = byDay.get(e.date) || { date: e.date, level: 0, maxCalm: null };
-    d.level = lv[i];
+    const d = byDay.get(e.date) || { date: e.date, start: i ? lv[i - 1] : first, level: 0, end: 0, maxCalm: null, reps: 0, calm: 0, mild: 0, esc: 0 };
+    d.level = d.end = lv[i];
+    d.reps++; if(e.outcome === 'calm') d.calm++; else if(e.outcome === 'mild') d.mild++; else if(e.outcome === 'escalated') d.esc++;
     // longest time outside that she managed calmly that day (0 = only the front door)
     if(e.outcome === 'calm' && e.step >= LAST_CUE && DUR[e.step] != null) d.maxCalm = Math.max(d.maxCalm == null ? 0 : d.maxCalm, DUR[e.step]);
     byDay.set(e.date, d);

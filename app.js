@@ -1,6 +1,6 @@
 // Churro tracker app. Uses logic.js (pure) and Supabase (sync + push queue).
 'use strict';
-const APP_VERSION = '50';
+const APP_VERSION = '51';
 const CFG = window.PT_CONFIG || {};
 const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -372,7 +372,7 @@ function renderPos(){
   let nextM = null;
   for(let k = st.level + 1; k <= TOP; k++){ if(MILESTONES[k]){ nextM = k; break; } }
   $('posNext').textContent = nextM != null
-    ? 'Next: ' + fmtSec(DUR[nextM]) + ' (' + MILESTONES[nextM] + ') · ' + (nextM - st.level) + ' step' + (nextM - st.level === 1 ? '' : 's') + ' away'
+    ? 'Next milestone: ' + fmtSec(DUR[nextM]) + ' · ' + (nextM - st.level) + ' step' + (nextM - st.level === 1 ? '' : 's') + ' away'
     : 'You are at the top of the ladder.';
   const legend = [];
   if(info.skipped.length) legend.push('Orange: steps you set by hand, not earned by reps.');
@@ -707,19 +707,18 @@ function weekHtml(){
       ${row('Wobbles', w.cur.mild, w.prev.mild)}
       ${row('Upsets', w.cur.esc, w.prev.esc)}
       ${row('Step change', diff(w.cur), diff(w.prev))}
-      ${row('Highest step', w.cur.trained ? w.cur.high + 1 : '-', w.prev.trained ? w.prev.high + 1 : '-')}
+      ${row('Highest step', w.cur.trained ? stepLabel(w.cur.high) : '-', w.prev.trained ? stepLabel(w.prev.high) : '-')}
     </table><div class="hint">Medicated and voided reps do not count toward the ladder, but are included in the rep counts.</div>`;
 }
 function progressHtml(){
   const st0 = stateFrom(ladderEntries(), place);
   if(st0.level < FIRST_OUT) return '';
-  let s = progressSeries(liveEntries(), place);
+  const s = progressSeries(liveEntries(), place);
   if(!s || s.length < 2) return s ? '<div class="hint">The graph starts on the first day of the front door step and needs a second day to draw a line.</div>' : '';
-  s = s.slice(-28);
   const secOf = lv => (lv >= FIRST_OUT ? DUR[lv] : 0);
   // The scale starts at door-only to 5 minutes and grows as she progresses, so early on the graph stays small.
   const allTicks = [[0, 'Door only'], [2, '2 s'], [10, '10 s'], [60, '1 min'], [300, '5 min'], [900, '15 min'], [3600, '1 h'], [7200, '2 h'], [14400, '4 h goal']];
-  const reached = Math.max.apply(null, s.map(p => Math.max(secOf(p.level), p.maxCalm == null ? 0 : p.maxCalm)));
+  const reached = Math.max.apply(null, s.map(p => Math.max(secOf(p.start), secOf(p.end), p.maxCalm == null ? 0 : p.maxCalm)));
   const cap = (allTicks.find(t => t[0] > reached && t[0] >= 300) || allTicks[allTicks.length - 1])[0];
   const ticks = allTicks.filter(t => t[0] <= cap);
   const W = 320, L = 50, R = 12, T = 10, B = 30, H = 84 + 15 * ticks.length;
@@ -729,23 +728,36 @@ function progressHtml(){
   const dayNum = d => { const [y, m, dd] = d.split('-').map(Number); return Math.round(Date.UTC(y, m - 1, dd) / 86400000); };
   const d0 = dayNum(s[0].date), span = Math.max(1, dayNum(s[s.length - 1].date) - d0);
   const xOf = d => L + (W - L - R) * ((dayNum(d) - d0) / span);
+  const sel = (ui.progSel && s.find(p => p.date === ui.progSel)) || s[s.length - 1];
   let g = '';
   ticks.forEach(([sec, lab]) => {
     const y = yOf(sec).toFixed(1), goal = sec === 14400;
     g += `<line x1="${L}" x2="${W - R}" y1="${y}" y2="${y}" stroke="var(--line)" stroke-width="1"${goal ? ' stroke-dasharray="4 3"' : ''}/><text x="${L - 6}" y="${(+y + 3).toFixed(1)}" text-anchor="end" font-size="9" fill="var(--ink-2)">${lab}</text>`;
   });
-  const nx = Math.min(5, s.length), xl = new Set();
-  for(let k = 0; k < nx; k++) xl.add(Math.round(k * (s.length - 1) / Math.max(1, nx - 1)));
+  // A small tick for every training day; a date label whenever there is room, always on the last day.
   let xa = `<line x1="${L}" x2="${W - R}" y1="${floor + 12}" y2="${floor + 12}" stroke="var(--ink-2)" stroke-width="1"/>`;
-  xl.forEach(k => { const p = s[k], x = xOf(p.date).toFixed(1); xa += `<line x1="${x}" x2="${x}" y1="${floor + 12}" y2="${floor + 16}" stroke="var(--ink-2)"/><text x="${x}" y="${floor + 28}" text-anchor="middle" font-size="9" fill="var(--ink-2)">${p.date.slice(8)}/${p.date.slice(5, 7)}</text>`; });
-  const wpts = s.map(p => xOf(p.date).toFixed(1) + ',' + yOf(secOf(p.level)).toFixed(1)).join(' ');
-  const wdots = s.map(p => `<circle cx="${xOf(p.date).toFixed(1)}" cy="${yOf(secOf(p.level)).toFixed(1)}" r="2.5" fill="var(--calm)"/>`).join('');
+  let lastLab = -1e9;
+  s.forEach((p, k) => {
+    const x = xOf(p.date), isLast = k === s.length - 1;
+    xa += `<line x1="${x.toFixed(1)}" x2="${x.toFixed(1)}" y1="${floor + 12}" y2="${floor + 16}" stroke="var(--ink-2)"/>`;
+    if((x - lastLab >= 34 && (W - R - x >= 34 || isLast)) || (isLast && x - lastLab >= 28)){ lastLab = x; const edge = x > W - 18; xa += `<text x="${(edge ? W - 1 : x).toFixed(1)}" y="${floor + 28}" text-anchor="${edge ? 'end' : 'middle'}" font-size="9" fill="var(--ink-2)">${p.date.slice(8)}/${p.date.slice(5, 7)}</text>`; }
+  });
+  // The line follows the step she was asked to work on each day. A step-up at the end of a day shows on the next day.
+  const wpts = s.map(p => xOf(p.date).toFixed(1) + ',' + yOf(secOf(p.start)).toFixed(1)).join(' ');
+  const wdots = s.map(p => `<circle cx="${xOf(p.date).toFixed(1)}" cy="${yOf(secOf(p.start)).toFixed(1)}" r="${p === sel ? 4 : 2.5}" fill="var(--calm)"/>`).join('');
   const cdots = s.filter(p => p.maxCalm != null).map(p => `<rect x="${(xOf(p.date) - 3.5).toFixed(1)}" y="${(yOf(p.maxCalm) - 3.5).toFixed(1)}" width="7" height="7" transform="rotate(45 ${xOf(p.date).toFixed(1)} ${yOf(p.maxCalm).toFixed(1)})" fill="var(--surface)" stroke="var(--ink)" stroke-width="1.6"/>`).join('');
+  const sx = xOf(sel.date).toFixed(1);
+  const selLine = `<line x1="${sx}" x2="${sx}" y1="${top}" y2="${floor + 12}" stroke="var(--ink-2)" stroke-width="1" stroke-dasharray="2 3"/>`;
+  const hit = Math.max(8, Math.min(22, (W - L - R) / Math.max(1, span) * 0.9));
+  const hits = s.map(p => `<rect x="${(xOf(p.date) - hit / 2).toFixed(1)}" y="0" width="${hit.toFixed(1)}" height="${H}" fill="transparent" data-action="progday" data-date="${p.date}" style="cursor:pointer"/>`).join('');
   const last = s[s.length - 1];
   const best = Math.max.apply(null, s.map(p => p.maxCalm == null ? -1 : p.maxCalm));
-  const desc = `Working step over time. Now: ${stepLabel(last.level)}.` + (best >= 0 ? ` Longest calm rep so far: ${best === 0 ? 'front door only' : fmtSec(best)}.` : '');
-  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(desc)}" style="width:100%;height:auto">${g}${xa}<polyline points="${wpts}" fill="none" stroke="var(--calm)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>${cdots}${wdots}</svg>
-    <div class="legend"><span><i class="lg-dot"></i>Working step (time outside)</span><span><i class="lg-dia"></i>Longest calm rep that day</span></div>
+  const desc = `Working step over time. Now: ${stepLabel(last.end)}.` + (best >= 0 ? ` Longest calm rep so far: ${best === 0 ? 'front door only' : fmtSec(best)}.` : '');
+  const calmTxt = sel.maxCalm == null ? 'no calm departure' : sel.maxCalm === 0 ? 'front door only' : fmtSec(sel.maxCalm);
+  const detail = `<div class="progday"><b>${esc(fmtDay(sel.date))}</b><div>Started the day at <b>${esc(stepLabel(sel.start))}</b>${sel.end > sel.start ? `, finished at <b>${esc(stepLabel(sel.end))}</b>` : sel.end < sel.start ? `, finished back at ${esc(stepLabel(sel.end))}` : ''}.</div><div>Longest calm rep: ${esc(calmTxt)}. ${sel.reps} rep${sel.reps === 1 ? '' : 's'}: ${sel.calm} calm, ${sel.mild} wobble${sel.mild === 1 ? '' : 's'}, ${sel.esc} upset${sel.esc === 1 ? '' : 's'}.</div></div>`;
+  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(desc)}" style="width:100%;height:auto">${g}${xa}${selLine}<polyline points="${wpts}" fill="none" stroke="var(--calm)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>${cdots}${wdots}${hits}</svg>
+    <div class="legend"><span><i class="lg-dot"></i>Working step that day</span><span><i class="lg-dia"></i>Longest calm rep that day</span></div>
+    ${detail}<div class="hint">Tap a day on the graph to see it.</div>
 `;
 }
 function moreSec(id, title, body, forceOpen){
@@ -1071,6 +1083,7 @@ document.addEventListener('click', ev => {
     case 'del': { const id = t.dataset.id; if(ui.confirmDel !== id){ ui.confirmDel = id; renderLog(); } else { ui.confirmDel = null; ui.editId = null; removeEntry(id); render({ rep:true }); } break; }
     case 'daysheet': openDaySheet(); break;
     case 'steps': openSteps(); break;
+    case 'progday': ui.progSel = t.dataset.date; renderProgressBox(); break;
     case 'helpdismiss': lsSet('pt-help-dismiss', todayStr()); renderRep(); break;
     case 'medtoggle': putDay(todayStr(), { medicated: !isMedicated() });
       // stamp today's existing reps so the ladder ignores (or counts) them consistently
@@ -1155,3 +1168,10 @@ document.addEventListener('keydown', ev => { const c2 = ev.target && ev.target.c
 document.addEventListener('keydown', ev => { const c = ev.target && ev.target.id === 'posCard'; if(c && (ev.key === 'Enter' || ev.key === ' ')){ ev.preventDefault(); openSteps(); } });
 document.addEventListener('click', ev => { if(ev.target.closest('#posCard') && !ev.target.closest('button')) openSteps(); });
 document.addEventListener('click', ev => { if(ev.target.closest('.tapbox') && !ev.target.closest('button')){ ui.showSteps = !ui.showSteps; renderRep(); } });
+// Tap outside a sheet (on the dimmed background) to close it.
+document.addEventListener('click', ev => {
+  const d = ev.target;
+  if(!d || d.tagName !== 'DIALOG' || !d.open) return;
+  const r = d.getBoundingClientRect();
+  if(ev.clientX < r.left || ev.clientX > r.right || ev.clientY < r.top || ev.clientY > r.bottom) d.close();
+});

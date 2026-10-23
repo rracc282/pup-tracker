@@ -326,3 +326,14 @@ console.log('logic tests (rough day) ok');
   assert.strictEqual(st.level,i12);
 }
 console.log('logic tests (daily climb limit) ok');
+
+{
+  // graph: the line follows the step she started each day on, so a step-up on the last rep shows on the next day
+  const id=()=>Math.random()+'', i7=L.DUR.indexOf(7), i10=L.DUR.indexOf(10), T=Date.parse('2026-10-20T09:00:00Z');
+  const mk=(step,date,t)=>({kind:'dep',place:'home',id:id(),step,level:step,outcome:'calm',date,createdAt:t});
+  const reps=[mk(i7,'2026-10-19',T-86400000),mk(i7,'2026-10-20',T),mk(i7,'2026-10-20',T+1e6),mk(i7,'2026-10-20',T+2e6),mk(i10,'2026-10-21',T+86400000)];
+  const s=L.progressSeries(reps,'home'); const d=s.find(x=>x.date==='2026-10-20');
+  assert.strictEqual(d.start,i7); assert.strictEqual(d.end,i10); assert.strictEqual(d.maxCalm,7); assert.strictEqual(d.reps,3);
+  assert.strictEqual(s.find(x=>x.date==='2026-10-21').start,i10);
+}
+console.log('logic tests (graph series) ok');
