@@ -1,6 +1,6 @@
 // Churro tracker app. Uses logic.js (pure) and Supabase (sync + push queue).
 'use strict';
-const APP_VERSION = '56';
+const APP_VERSION = '57';
 const CFG = window.PT_CONFIG || {};
 const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -641,7 +641,7 @@ function renderRep(){
       ${timed ? '<div class="tbar"><div id="tFill"></div></div>' : ''}
       <div class="tnote${timed && r.alerted ? ' alert' : ''}" id="tNote">${timed ? (r.alerted ? 'Time is up. Go back in calmly.' : 'Stay out until the beep.') : idleNote}</div>
       <button class="btn primary" data-action="back">${timed || r.untimed ? 'I am back' : 'Done'}</button>
-      ${timed && DUR[r.step] <= 300 ? `<button class="btn" data-action="skiptimer">Watching the camera? Skip the timer and log ${esc(fmtSec(DUR[r.step]))}</button>` : ''}
+      ${timed ? `<button class="btn" data-action="skiptimer">Watching the camera? Skip the timer and log ${esc(fmtSec(DUR[r.step]))}</button>` : ''}
       ${timed || r.untimed ? '<button class="btn danger" data-action="early">Back early. She is escalating</button>' : ''}`;
     tick();
     return;
@@ -953,8 +953,8 @@ async function scheduleForgot(r, planSec){
   const id = await qInsert({ fire_at: new Date(r.startedAt + (planSec + 20 * 60) * 1000).toISOString(), kind:'forgot', tag:'forgot', title:rnd(FORGOT_MSGS)[0], body:'', open:'' });
   if(id && ui.rep && ui.rep === r){ r.forgotId = id; saveActive(); }
 }
-// Steps up to this many seconds have no timer: she counts, the planned time is logged.
-const UNTIMED_MAX = 30;
+// Steps shorter than 5 minutes have no timer: she watches the camera, and the planned time is logged. From 5 minutes on there is a timer, which can be skipped.
+const UNTIMED_MAX = 299;
 function startRep(step){
   flushNote();
   ui.feedback = null; ui.override = false;
