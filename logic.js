@@ -54,7 +54,10 @@ const GATE_DAYS = 2;  // calm reps there must come from at least this many diffe
 function need(level){ return level <= 2 ? 2 : level <= 11 ? 3 : level === GATE ? 4 : 3; }
 // Until 22 Oct 2026, departures from 75 s to 4 min needed only 2 calm reps. Reps logged on those days are still replayed that way.
 function needV2a(level){ return level <= 2 ? 2 : level <= 11 ? 3 : level === GATE ? 4 : DUR[level] <= 60 ? 3 : DUR[level] <= 240 ? 2 : 3; }
-function capFor(level){ return level <= 5 ? 3 : level <= 11 ? 2 : level > GATE && DUR[level] <= 10 ? 2 : DUR[level] <= 60 ? 1 : DUR[level] <= 240 ? 2 : 1; }
+function capFor(level){ return level <= 11 ? 3 : level > GATE && DUR[level] <= 10 ? 2 : DUR[level] <= 60 ? 1 : DUR[level] <= 240 ? 2 : 1; }
+// Until 23 Oct 2026, the steps behind the door allowed only 2 step-ups a day. Reps from those days are still replayed that way.
+const CAP3_FROM = '2026-10-24';
+function capV2a(level){ return level <= 5 ? 3 : level <= 11 ? 2 : level > GATE && DUR[level] <= 10 ? 2 : DUR[level] <= 60 ? 1 : DUR[level] <= 240 ? 2 : 1; }
 // The stricter rules above apply from this day on. Reps logged before it are replayed under the rules she trained with,
 // so changing the rules never rewrites her history or moves her back.
 // From the front door on, a calm rep while she is asleep does not teach her about the cue. At least this many of the calm reps must be awake.
@@ -110,7 +113,7 @@ function computeState(depList, startLevel, asOf){
       wob = 0; wobMin = null;
       if(hard){
         run++; runDates.add(e.date); if(!(e.tags||[]).includes('Asleep before')){ runAwake++; dayAw[e.date] = (dayAw[e.date] || 0) + 1; }
-        const v2 = e.date >= RULES_V2_FROM, needNow = !v2 ? needV1(level) : (e.date >= NEED3_FROM ? need(level) : needV2a(level)), capNow = v2 ? capFor(level) : capV1(level);
+        const v2 = e.date >= RULES_V2_FROM, needNow = !v2 ? needV1(level) : (e.date >= NEED3_FROM ? need(level) : needV2a(level)), capNow = !v2 ? capV1(level) : (e.date >= CAP3_FROM ? capFor(level) : capV2a(level));
         if(run >= needNow){
           const used = adv[e.date] || 0;
           if(level >= TOP){ run = 0; runDates = new Set(); runAwake = 0; dayAw = {}; lastEvent = 'top'; }
@@ -558,4 +561,4 @@ function buildSummary(entries, days, date, place){
   return L.join('\n');
 }
 
-if(typeof module !== 'undefined') module.exports = { MILESTONES, DUR, TOP, FIRST_OUT, LAST_CUE, QUICK_CEILING, isQuick, STEP_NAMES, CUE_IDS, idOf, indexOfId, stepLabel, stepTag, stepEst, gapSec, fits, need, capFor, sortedByDate, computeState, depsFor, stateFrom, baselineFor, startFor, skippedRanges, barInfo, levelsAfter, rand01, pickNext, ceilingFor, cooldownMs, waitUntil, coachMsg, normalizeEntry, buildSummary, fmtSec, sessionCount, isTiny, restSec, SESSION_MIN, SESSION_MAX, sessionSizeFor, breakMinFor, isSessionStart, warmupPlan, RULES_V2_FROM, CLIMB_FROM, LADDER_VER, shorterStep, GATE, GATE_DAYS, GATE_DAY_REPS, dateAdd, helpAlerts, windowStats, weekCompare, progressSeries };
+if(typeof module !== 'undefined') module.exports = { MILESTONES, DUR, TOP, FIRST_OUT, LAST_CUE, QUICK_CEILING, isQuick, STEP_NAMES, CUE_IDS, idOf, indexOfId, stepLabel, stepTag, stepEst, gapSec, fits, need, capFor, sortedByDate, computeState, depsFor, stateFrom, baselineFor, startFor, skippedRanges, barInfo, levelsAfter, rand01, pickNext, ceilingFor, cooldownMs, waitUntil, coachMsg, normalizeEntry, buildSummary, fmtSec, sessionCount, isTiny, restSec, SESSION_MIN, SESSION_MAX, sessionSizeFor, breakMinFor, isSessionStart, warmupPlan, RULES_V2_FROM, CLIMB_FROM, CAP3_FROM, LADDER_VER, shorterStep, GATE, GATE_DAYS, GATE_DAY_REPS, dateAdd, helpAlerts, windowStats, weekCompare, progressSeries };

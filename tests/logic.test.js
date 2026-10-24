@@ -159,7 +159,7 @@ console.log('logic tests (new place) ok');
   let i4=0,t4=Date.parse('2026-11-12T09:00:00Z');
   const G=(step,outcome,date)=>({id:'g'+(i4++),kind:'dep',place:'home',date,step,outcome,createdAt:(t4+=60000)});
   assert.strictEqual(L.need(12),4); assert.strictEqual(L.GATE,12);
-  assert.strictEqual(L.capFor(3),3); assert.strictEqual(L.capFor(8),2); assert.strictEqual(L.capFor(12),1); assert.strictEqual(L.capFor(L.DUR.indexOf(60)),1); assert.strictEqual(L.capFor(L.DUR.indexOf(2)),2); assert.strictEqual(L.capFor(L.DUR.indexOf(10)),2); assert.strictEqual(L.capFor(L.DUR.indexOf(12)),1); assert.strictEqual(L.capFor(L.DUR.indexOf(90)),2); assert.strictEqual(L.capFor(L.DUR.indexOf(300)),1);
+  assert.strictEqual(L.capFor(3),3); assert.strictEqual(L.capFor(8),3); assert.strictEqual(L.capFor(12),1); assert.strictEqual(L.capFor(L.DUR.indexOf(60)),1); assert.strictEqual(L.capFor(L.DUR.indexOf(2)),2); assert.strictEqual(L.capFor(L.DUR.indexOf(10)),2); assert.strictEqual(L.capFor(L.DUR.indexOf(12)),1); assert.strictEqual(L.capFor(L.DUR.indexOf(90)),2); assert.strictEqual(L.capFor(L.DUR.indexOf(300)),1);
   assert.strictEqual(L.need(15),3); assert.strictEqual(L.need(L.DUR.indexOf(120)),3); assert.strictEqual(L.need(L.DUR.indexOf(60)),3); assert.strictEqual(L.need(L.DUR.indexOf(300)),3);
   { const A=(step,date,asleep)=>Object.assign(G(step,'calm',date),{tags:asleep?['Asleep before']:[]});
     const D1='2026-11-12', D2='2026-11-13';
@@ -187,8 +187,8 @@ console.log('logic tests (new place) ok');
   assert.strictEqual(s.level,12,'a single day after a reset is still not enough');
   // one step-up per day on the first departures
   const dep=[1,2,3,4,5,6,7,8].map(()=>G(13,'calm','2026-11-14')); s=L.computeState(dep,13); assert.strictEqual(s.level,14,'one step-up a day on the first departures');
-  // behind the door: two step-ups a day, not three
-  const bd=[0,1,2,3,4,5,6,7,8,9].map((k)=>G(k<3?7:k<6?8:9,'calm','2026-11-12')); s=L.computeState(bd,7); assert(s.level<=9,'cap of 2 behind the door: '+s.level);
+  // behind the door: three step-ups a day from 24 Oct 2026, not four
+  const bd=[0,1,2,3,4,5,6,7,8,9].map((k)=>G(k<3?7:k<6?8:9,'calm','2026-11-12')); s=L.computeState(bd,7); assert(s.level<=10,'cap of 3 behind the door: '+s.level);
   // warm-up: first rep of a session at/after the front door step is easier; below it nothing changes
   const st12=L.computeState([],12); const seen=new Set();
   for(let k=0;k<200;k++){ const n=L.pickNext(st12,270,'w'+k,{sessionStart:true}); assert.strictEqual(n.kind,'warmup'); assert(n.step===10||n.step===11); seen.add(n.step); }
@@ -401,3 +401,12 @@ console.log('logic tests (3 calm everywhere, break easing) ok');
   s=L.progressSeries(base.concat([mk(i15,'2026-11-02',T+86400000)]),'home'); assert.strictEqual(s[s.length-1].easier,null);
 }
 console.log('logic tests (graph easier starts) ok');
+
+{
+  // from 24 Oct 2026: up to 3 step-ups a day on every cue step; earlier days replay with 2 behind the door
+  const id=()=>Math.random()+'', mk=(step,lvl,date,ts)=>({kind:'dep',place:'zurich',id:id(),step,level:lvl,outcome:'calm',date,createdAt:ts});
+  const run=(date)=>{ let acc=[],t=Date.parse(date+'T08:00:00Z'); for(let lv=6;lv<9;lv++){ for(let i=0;i<3;i++) acc.push(mk(lv,6,date,t+=600000)); } return L.computeState(acc.map(e=>Object.assign({},e,{level:6})),0).level; };
+  assert.strictEqual(run('2026-10-24'),9);   // three step-ups
+  assert.strictEqual(run('2026-10-20'),8);   // old limit: two
+}
+console.log('logic tests (3 cue step-ups a day) ok');
