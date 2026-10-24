@@ -410,3 +410,16 @@ console.log('logic tests (graph easier starts) ok');
   assert.strictEqual(run('2026-10-20'),8);   // old limit: two
 }
 console.log('logic tests (3 cue step-ups a day) ok');
+
+{
+  // the "first day back: one step-up" rule is for departures only; cue steps keep their 3 a day
+  const id=()=>Math.random()+'', mk=(step,lvl,date,ts)=>({kind:'dep',place:'zurich',id:id(),step,level:lvl,outcome:'calm',date,createdAt:ts});
+  const T=Date.parse('2026-10-24T08:00:00Z');
+  const prev=[mk(6,6,'2026-10-11',T-13*86400000)];
+  const cue=prev.concat([6,6,6,7,7,7].map((st,i)=>mk(st,6,'2026-10-24',T+i*600000)));
+  assert.strictEqual(L.computeState(cue,0).level,8);   // two step-ups on the first day back at a cue step
+  const i10=L.DUR.indexOf(10), pd=[mk(i10,i10,'2026-10-11',T-13*86400000)];
+  const dep=pd.concat([0,1,2,3,4,5].map(i=>mk(i10,i10,'2026-10-24',T+i*600000)));
+  assert.strictEqual(L.computeState(dep,0).level,i10+1);   // departures: one step-up on the first day back
+}
+console.log('logic tests (first day back, cues) ok');

@@ -69,7 +69,7 @@ const RULES_V2_FROM = '2026-10-13';
 // From this day a small wobble no longer blocks step-ups for the rest of the day (it only restarts the count). An upset still does.
 const WOBBLE_OK_FROM = '2026-10-18';
 // From this day, a day's climb on departure steps is limited: she can end the day at most this many times higher than the step she
-// started it on, and only 1 step-up on the first day back after 2 or more days without training.
+// started it on, and only 1 step-up on the first day back after 2 or more days without training (departure steps only, never the cues).
 const CLIMB_FROM = '2026-10-23', CLIMB_RATIO = 1.5, AWAY_DAYS = 2;
 // From this day: 3 calm reps on every departure step, and after 7 or more days without training at Home she starts one step easier.
 const NEED3_FROM = '2026-10-23', BREAK_FROM = '2026-10-23', BREAK_DAYS = 7;
@@ -120,7 +120,7 @@ function computeState(depList, startLevel, asOf){
           else if(v2 && level === GATE && gateDays(dayAw) < GATE_DAYS){ lastEvent = 'gate'; }   // needs awake calm reps on two different days
           else if(v2 && level > GATE && runAwake < awakeNeed(needNow)){ lastEvent = 'awake'; }   // calm, but too many asleep reps
           else if(v2 && rough[e.date]){ run = needNow; lastEvent = 'roughDay'; }   // a wobble or upset earlier today: no step-up until tomorrow
-          else if(used < capNow && !(e.date >= CLIMB_FROM && ((backDay[e.date] && used >= 1) || (level >= FIRST_OUT && DUR[dayStart[e.date]] > 0 && DUR[level + 1] > CLIMB_RATIO * DUR[dayStart[e.date]] + 1e-9)))){ level++; run = 0; runDates = new Set(); runAwake = 0; dayAw = {}; adv[e.date] = used + 1; lastEvent = 'advance'; }
+          else if(used < capNow && !(e.date >= CLIMB_FROM && ((backDay[e.date] && used >= 1 && level >= FIRST_OUT) || (level >= FIRST_OUT && DUR[dayStart[e.date]] > 0 && DUR[level + 1] > CLIMB_RATIO * DUR[dayStart[e.date]] + 1e-9)))){ level++; run = 0; runDates = new Set(); runAwake = 0; dayAw = {}; adv[e.date] = used + 1; lastEvent = 'advance'; }
           else { run = needNow; lastEvent = 'capped'; }
         } else {
           lastEvent = 'calmProgress';
