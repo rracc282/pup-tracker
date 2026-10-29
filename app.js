@@ -1,6 +1,6 @@
 // Churro tracker app. Uses logic.js (pure) and Supabase (sync + push queue).
 'use strict';
-const APP_VERSION = '59';
+const APP_VERSION = '60';
 const CFG = window.PT_CONFIG || {};
 const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -57,8 +57,8 @@ let place = 'home';   // today's place, set from the day sheet
 let pocket = parseInt(lsGet('pt-pocket'), 10) || 15;
 let spot = lsGet('pt-spot') || '';
 let ui = { mode:'idle', rep:null, feedback:null, showAll:false, confirmDel:null, editId:null, override:false, alone:null };
-// "How long do you have?" only matters once the working step no longer fits the shortest option.
-function pocketMatters(st){ return !fits(st.level, POCKETS[0][0]); }
+// "How long do you have?" only matters once the departure is longer than 20 minutes.
+function pocketMatters(st){ return st.level >= FIRST_OUT && DUR[st.level] > 1200; }
 function effPocket(st){ return pocketMatters(st) ? pocket : POCKETS[POCKETS.length - 1][0]; }
 let tickTimer = null, wakeLock = null, audio = null, pushOn = false;
 
