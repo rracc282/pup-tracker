@@ -1,9 +1,9 @@
-const LOGIC_VERSION = '60';
+const LOGIC_VERSION = '61';
 // Pure training logic. No DOM, no network. Loaded by index.html and tested in node.
 // One ladder. Steps 0-5: a cue while she watches. 6-12: cues while she is behind the closed door. 13 and up: seconds spent outside.
 // Time outside per step. Every step has a stable id ('out.<seconds>'), so inserting steps never changes saved history.
 // Jumps between steps are mostly 25-40% (from 12% to 50% at the extremes) so the ladder moves in small increments.
-const DUR = [null,null,null,null,null,null,null,null,null,null,null,null,0,2,3,4,5,7,10,12,15,20,25,30,40,45,60,75,90,120,150,180,240,300,360,420,480,600,750,900,1200,1500,1800,2220,2700,3600,4500,5400,7200,9000,10800,14400];
+const DUR = [null,null,null,null,null,null,null,null,null,null,null,null,0,2,3,4,5,7,10,12,15,20,25,30,40,50,60,75,90,120,150,180,240,300,360,420,480,600,750,900,1200,1500,1800,2220,2700,3600,4500,5400,7200,9000,10800,14400];
 // The ladder before the extra steps were added. Only used to read old saved step numbers that have no step name.
 const OLD_DUR = [null,null,null,null,null,null,null,null,null,null,null,null,0,2,4,7,10,15,20,30,45,60,90,120,180,240,300,420,600,900,1200,1800,2700,3600,5400,7200,10800,14400];
 function fromOldIndex(i){ return i < 14 ? i : (OLD_DUR[i] != null ? DUR.indexOf(OLD_DUR[i]) : i); }
