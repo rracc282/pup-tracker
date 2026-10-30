@@ -1,6 +1,6 @@
 // Churro tracker app. Uses logic.js (pure) and Supabase (sync + push queue).
 'use strict';
-const APP_VERSION = '76';
+const APP_VERSION = '77';
 const CFG = window.PT_CONFIG || {};
 const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -341,7 +341,9 @@ function maybeDeepLink(){
 function todayDeps(){ const t = todayStr(); return liveEntries().filter(e => e.kind === 'dep' && e.date === t); }
 function catCount(step){ return todayDeps().filter(e => isQuick(e.step) === isQuick(step)).length; }
 function catLimit(step){ return isQuick(step) ? QUICK_CEILING : ceilingFor(new Date(), dayType()); }
-function capReached(step){ return catCount(step) >= catLimit(step); }
+function totalReached(){ return todayDeps().length >= TOTAL_CEILING; }
+function capReached(step){ return totalReached() || catCount(step) >= catLimit(step); }
+function capWhat(step){ return totalReached() ? TOTAL_CEILING + ' reps in total' : catLimit(step) + ' ' + (isQuick(step) ? 'short' : 'longer') + ' reps'; }
 function waitInfo(){
   const w = waitUntil(liveEntries().filter(e => e.kind === 'dep'));
   if(!w) return null;
@@ -541,7 +543,7 @@ function bannersHtml(step){
   } else if(!isMedicated() && stateNow(ladderEntries(), place).lastEvent === 'capped' && last && last.date === todayStr()){
     h += `<div class="banner info">No more step-ups today. More reps at this step are fine, up to today's limit. Some will be shorter on purpose.</div>`;
   } else if(capReached(step)){
-    h += `<div class="banner info">That is enough ${isQuick(step) ? 'short' : 'longer'} reps for today (${catLimit(step)}). More will not speed things up. Rest blocks still help.</div>`;
+    h += `<div class="banner info">That is enough for today: you reached the limit of ${capWhat(step)}. More will not speed things up. Rest blocks still help.</div>`;
   }
   if(!todays.length && !isMedicated()){
     const sn = stateNow(ladderEntries(), place);
@@ -620,7 +622,7 @@ function renderRep(){
     if(done){
       el.innerHTML = keep + `<div class="eyebrow">Day complete</div>
         <div class="rep-label">That is enough for today</div>
-        <div class="rep-sub">You reached today's limit of ${catLimit(nx.step)} ${isQuick(nx.step) ? 'short' : 'longer'} reps. More will not speed things up.</div>
+        <div class="rep-sub">You reached today's limit of ${capWhat(nx.step)}. More will not speed things up.</div>
         <button class="btn primary" data-action="eod">End of day summary</button>
         <div class="link-row"><button class="link" data-action="override">Keep training anyway</button></div>`;
       return;
@@ -702,6 +704,7 @@ function renderToday(){
   $('todayCard').innerHTML = `<div class="eyebrow">Today</div>
     <div class="budget">
       <div class="bud"><span>Short reps <i>(up to 1 min)</i></span><b>${cueN} <em>of ${QUICK_CEILING}</em></b></div>
+      <div class="bud"><span>All reps today</span><b>${todayDeps().length} <em>of ${TOTAL_CEILING}</em></b></div>
       ${showLong ? `<div class="bud"><span>Longer reps <i>(over 1 min)</i></span><b>${outN} <em>of ${ceilingFor(new Date(), dayType())}</em></b></div>` : ''}
     </div>
     <div class="tiles">${tile('Calm', c)}${tile('Alert', al)}${tile('Wobble', w)}${tile('Upset', u)}${tile('Rests', rests)}</div>
@@ -798,7 +801,7 @@ function progressHtml(){
     if(show) xa += `<text x="${lx(k).toFixed(1)}" y="${floor + 28}" text-anchor="middle" font-size="9.5" fill="${k === sel ? 'var(--ink)' : 'var(--ink-2)'}"${k === sel ? ' font-weight="700"' : ''}>${p.date.slice(8)}/${p.date.slice(5, 7)}</text>`;
   });
   // Faint bars behind the line: cues she saw without a departure that day.
-  const CUE_FULL = 25;   // a bar reaching the top of the graph means 25 cues in a day
+  const CUE_FULL = 20;   // a bar reaching the top of the graph means 20 cues in a day
   const cueN = s.map(p => cuesOn(p.date)), cueMax = Math.max.apply(null, cueN.concat([0]));
   const bars = cueMax ? cueN.map((c, k) => c ? `<rect x="${(xOf(k) - Math.min(9, step * 0.38)).toFixed(1)}" y="${(floor + 12 - (Math.min(c, CUE_FULL) / CUE_FULL) * (floor + 12 - top)).toFixed(1)}" width="${Math.min(18, step * 0.76).toFixed(1)}" height="${((Math.min(c, CUE_FULL) / CUE_FULL) * (floor + 12 - top)).toFixed(1)}" rx="3" fill="var(--ink-2)" opacity=".22"/>` : '').join('') : '';
   // Green band behind the selected day.

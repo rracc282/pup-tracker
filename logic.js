@@ -1,4 +1,4 @@
-const LOGIC_VERSION = '76';
+const LOGIC_VERSION = '77';
 // Pure training logic. No DOM, no network. Loaded by index.html and tested in node.
 // One ladder. Steps 0-5: a cue while she watches. 6-12: cues while she is behind the closed door. 13 and up: seconds spent outside.
 // Time outside per step. Every step has a stable id ('out.<seconds>'), so inserting steps never changes saved history.
@@ -10,6 +10,7 @@ function fromOldIndex(i){ return i < 14 ? i : (OLD_DUR[i] != null ? DUR.indexOf(
 const TOP = DUR.length - 1;
 const FIRST_OUT = 13;
 const LAST_CUE = FIRST_OUT - 1;      // open and close the front door
+const TOTAL_CEILING = 15;            // all reps in a day, short and longer together
 const QUICK_CEILING = 15;            // cues and out-steps up to 60 s
 function isQuick(i){ return i < FIRST_OUT || DUR[i] <= 60; }
 const MILESTONES = {};
@@ -599,4 +600,4 @@ function buildSummary(entries, days, date, place){
   return L.join('\n');
 }
 
-if(typeof module !== 'undefined') module.exports = { MILESTONES, DUR, TOP, FIRST_OUT, LAST_CUE, QUICK_CEILING, isQuick, STEP_NAMES, CUE_IDS, idOf, indexOfId, stepLabel, stepTag, stepEst, gapSec, fits, need, capFor, sortedByDate, computeState, depsFor, stateFrom, baselineFor, startFor, skippedRanges, barInfo, levelsAfter, rand01, pickNext, ceilingFor, cooldownMs, waitUntil, coachMsg, normalizeEntry, buildSummary, fmtSec, sessionCount, isTiny, restSec, SESSION_MIN, SESSION_MAX, sessionSizeFor, breakMinFor, isSessionStart, warmupPlan, restlessSkip, ALERT2_FROM, setWinFrom, WIN_SIZE, WIN_GOOD, runText, RESTLESS_FROM, RULES_V2_FROM, CLIMB_FROM, CAP3_FROM, LADDER_VER, shorterStep, GATE, GATE_DAYS, GATE_DAY_REPS, dateAdd, helpAlerts, windowStats, weekCompare, progressSeries };
+if(typeof module !== 'undefined') module.exports = { MILESTONES, DUR, TOP, FIRST_OUT, LAST_CUE, QUICK_CEILING, TOTAL_CEILING, isQuick, STEP_NAMES, CUE_IDS, idOf, indexOfId, stepLabel, stepTag, stepEst, gapSec, fits, need, capFor, sortedByDate, computeState, depsFor, stateFrom, baselineFor, startFor, skippedRanges, barInfo, levelsAfter, rand01, pickNext, ceilingFor, cooldownMs, waitUntil, coachMsg, normalizeEntry, buildSummary, fmtSec, sessionCount, isTiny, restSec, SESSION_MIN, SESSION_MAX, sessionSizeFor, breakMinFor, isSessionStart, warmupPlan, restlessSkip, ALERT2_FROM, setWinFrom, WIN_SIZE, WIN_GOOD, runText, RESTLESS_FROM, RULES_V2_FROM, CLIMB_FROM, CAP3_FROM, LADDER_VER, shorterStep, GATE, GATE_DAYS, GATE_DAY_REPS, dateAdd, helpAlerts, windowStats, weekCompare, progressSeries };
