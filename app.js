@@ -1,6 +1,6 @@
 // Churro tracker app. Uses logic.js (pure) and Supabase (sync + push queue).
 'use strict';
-const APP_VERSION = '62';
+const APP_VERSION = '63';
 const CFG = window.PT_CONFIG || {};
 const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -357,7 +357,8 @@ function renderProgressBox(){
   const old = el.querySelector('.pgscroll'), keep = old ? old.scrollLeft : 0;
   el.hidden = !h;
   el.innerHTML = h ? '<div class="eyebrow">Progress</div>' + h : '';
-  const sc = el.querySelector('.pgscroll');
+  let sc = el.querySelector('.pgscroll');
+  if(sc && Math.abs(sc.clientWidth - (ui.pgW || 0)) > 1 && sc.clientWidth > 0){ ui.pgW = sc.clientWidth; el.innerHTML = '<div class="eyebrow">Progress</div>' + progressHtml(); sc = el.querySelector('.pgscroll'); }
   if(sc){ sc.addEventListener('pointerdown', () => { ui.progUser = true; }, { passive: true }); sc.scrollLeft = ui.progUser ? keep : sc.scrollWidth; }
 }
 function renderPos(){
@@ -748,18 +749,18 @@ function progressHtml(){
   const s = progressSeries(liveEntries(), place);
   if(!s || s.length < 2) return s ? '<div class="hint">The graph starts on the first day of the front door step and needs a second day to draw a line.</div>' : '';
   const secOf = lv => (lv >= FIRST_OUT ? DUR[lv] : 0);
-  // The scale starts at door-only to 5 minutes and grows as she progresses, so early on the graph stays small.
-  const allTicks = [[0, 'Door only'], [2, '2 s'], [10, '10 s'], [60, '1 min'], [300, '5 min'], [900, '15 min'], [3600, '1 h'], [7200, '2 h'], [14400, '4 h goal']];
-  const reached = Math.max.apply(null, s.map(p => Math.max(secOf(p.start), secOf(p.end), p.maxCalm == null ? 0 : p.maxCalm)));
-  const cap = (allTicks.find(t => t[0] > reached && t[0] >= 300) || allTicks[allTicks.length - 1])[0];
-  const ticks = allTicks.filter(t => t[0] <= cap);
-  // One column per training day, evenly spaced, so every date is shown. Many days scroll sideways (the scale stays fixed on the left).
-  const COL = 40, n = s.length, W = Math.max(n * COL, 250), step = W / n;
-  const T = 10, B = 30, H = 84 + 15 * ticks.length, floor = H - B - 14, top = T;
+  // The scale grows with her progress, so early on the graph stays small and the first steps get room.
+  const allTicks = [[0, 'Door only'], [2, '2 s'], [5, '5 s'], [10, '10 s'], [30, '30 s'], [60, '1 min'], [300, '5 min'], [900, '15 min'], [3600, '1 h'], [7200, '2 h'], [14400, '4 h goal']];
+  const reached = Math.max.apply(null, s.map(p => secOf(p.high)));
+  const cap = (allTicks.find(t => t[0] >= reached * 1.8 && t[0] >= 60) || allTicks[allTicks.length - 1])[0];
+  const ticks = allTicks.filter(t => t[0] <= cap && (t[0] === 0 || t[0] >= 2) && (cap > 300 ? ![5, 30].includes(t[0]) : true));
+  // One column per training day. The column width is chosen so a whole number of days fits, so no date is ever cut off.
+  const vis = ui.pgW || 250, n = s.length, k0 = Math.max(4, Math.round(vis / 44)), COL = vis / k0, W = Math.max(n * COL, vis), step = W / n;
+  const T = 12, H = 150, floor = H - 34, top = T;
   const MIN = 2, MAX = cap;
   const yOf = sec => sec < MIN ? floor : (floor - 16) - ((floor - 16) - top) * (Math.log(sec / MIN) / Math.log(MAX / MIN));
   const xOf = k => step * (k + 0.5);
-  const selK = Math.max(0, s.findIndex(p => p.date === ui.progSel)), sel = ui.progSel && s.some(p => p.date === ui.progSel) ? selK : n - 1, selP = s[sel];
+  const sel = ui.progSel && s.some(p => p.date === ui.progSel) ? s.findIndex(p => p.date === ui.progSel) : n - 1, selP = s[sel];
   let axis = '', grid = '';
   ticks.forEach(([sec, lab]) => {
     const y = yOf(sec).toFixed(1), goal = sec === 14400;
@@ -767,31 +768,33 @@ function progressHtml(){
     axis += `<text x="46" y="${(+y + 3).toFixed(1)}" text-anchor="end" font-size="9" fill="var(--ink-2)">${lab}</text>`;
   });
   let xa = `<line x1="0" x2="${W}" y1="${floor + 12}" y2="${floor + 12}" stroke="var(--ink-2)" stroke-width="1"/>`;
-  s.forEach((p, k) => { xa += `<line x1="${xOf(k).toFixed(1)}" x2="${xOf(k).toFixed(1)}" y1="${floor + 12}" y2="${floor + 16}" stroke="var(--ink-2)"/><text x="${xOf(k).toFixed(1)}" y="${floor + 28}" text-anchor="middle" font-size="9" fill="${k === sel ? 'var(--ink)' : 'var(--ink-2)'}"${k === sel ? ' font-weight="700"' : ''}>${p.date.slice(8)}/${p.date.slice(5, 7)}</text>`; });
-  const band = `<rect x="${(xOf(sel) - step / 2).toFixed(1)}" y="0" width="${step.toFixed(1)}" height="${H}" fill="var(--calm-bg)"/>`;
-  // The line follows the step she was asked to work on each day. A step-up at the end of a day shows on the next day.
+  s.forEach((p, k) => { xa += `<text x="${xOf(k).toFixed(1)}" y="${floor + 28}" text-anchor="middle" font-size="9.5" fill="${k === sel ? 'var(--ink)' : 'var(--ink-2)'}"${k === sel ? ' font-weight="700"' : ''}>${p.date.slice(8)}/${p.date.slice(5, 7)}</text>`; });
+  // Backgrounds: amber band behind stalled days, green band behind the selected day.
+  const bands = s.map((p, k) => p.stalled ? `<rect x="${(k * step).toFixed(1)}" y="0" width="${step.toFixed(1)}" height="${floor + 12}" fill="var(--wobble-bg)"/>` : '').join('')
+    + `<rect x="${(sel * step).toFixed(1)}" y="0" width="${step.toFixed(1)}" height="${H}" fill="var(--calm-bg)" opacity="${selP.stalled ? '.55' : '1'}"/>`;
+  // The path between days: from where she finished one day to where she started the next. Dashed dark green = she started easier.
   let segs = '';
   for(let k = 1; k < n; k++){
-    const a = [xOf(k - 1), yOf(secOf(s[k - 1].start))], c = [xOf(k), yOf(secOf(s[k].start))];
-    segs += `<line x1="${a[0].toFixed(1)}" y1="${a[1].toFixed(1)}" x2="${c[0].toFixed(1)}" y2="${c[1].toFixed(1)}" stroke="${s[k].easier ? 'var(--back)' : 'var(--calm)'}" stroke-width="2.5" stroke-linecap="round"${s[k].easier ? ' stroke-dasharray="5 4"' : ''}/>`;
+    segs += `<line x1="${xOf(k - 1).toFixed(1)}" y1="${yOf(secOf(s[k - 1].end)).toFixed(1)}" x2="${xOf(k).toFixed(1)}" y2="${yOf(secOf(s[k].start)).toFixed(1)}" stroke="${s[k].easier ? 'var(--back)' : 'var(--calm)'}" stroke-width="2" stroke-linecap="round"${s[k].easier ? ' stroke-dasharray="4 4"' : ''}/>`;
   }
-  const stems = s.map((p, k) => p.maxCalm == null ? '' : `<line x1="${xOf(k).toFixed(1)}" x2="${xOf(k).toFixed(1)}" y1="${yOf(secOf(p.start)).toFixed(1)}" y2="${yOf(p.maxCalm).toFixed(1)}" stroke="var(--ink-2)" stroke-width="1" opacity=".55"/>`).join('');
-  const cdots = s.map((p, k) => p.maxCalm == null ? '' : `<rect x="${(xOf(k) - 3.5).toFixed(1)}" y="${(yOf(p.maxCalm) - 3.5).toFixed(1)}" width="7" height="7" transform="rotate(45 ${xOf(k).toFixed(1)} ${yOf(p.maxCalm).toFixed(1)})" fill="var(--surface)" stroke="var(--ink)" stroke-width="1.6"/>`).join('');
-  const wdots = s.map((p, k) => `<circle cx="${xOf(k).toFixed(1)}" cy="${yOf(secOf(p.start)).toFixed(1)}" r="${k === sel ? 4.5 : 3}" fill="${p.easier ? 'var(--back)' : 'var(--calm)'}"/>`).join('');
-  const rings = s.map((p, k) => p.stalled ? `<circle cx="${xOf(k).toFixed(1)}" cy="${yOf(secOf(p.start)).toFixed(1)}" r="8" fill="none" stroke="var(--wobble)" stroke-width="2"/>` : '').join('');
-  const ticks2 = s.map((p, k) => p.dropped ? `<rect x="${(xOf(k) + 8).toFixed(1)}" y="${(yOf(secOf(p.dropFrom)) - 9).toFixed(1)}" width="4" height="18" rx="2" fill="var(--upset)" stroke="var(--surface)" stroke-width="1.5"/>` : '').join('');
-  const tri = s.map((p, k) => p.easier ? `<polygon points="${(xOf(k) - 4.5).toFixed(1)},${(yOf(secOf(p.start)) + 8).toFixed(1)} ${(xOf(k) + 4.5).toFixed(1)},${(yOf(secOf(p.start)) + 8).toFixed(1)} ${xOf(k).toFixed(1)},${(yOf(secOf(p.start)) + 14).toFixed(1)}" fill="var(--back)"/>` : '').join('');
-  const hits = s.map((p, k) => `<rect x="${(xOf(k) - step / 2).toFixed(1)}" y="0" width="${step.toFixed(1)}" height="${H}" fill="transparent" data-progday="${p.date}" style="cursor:pointer"/>`).join('');
+  // One pill per day, from the lowest to the highest step she worked on that day. Red = she dropped back that day. Hollow = a day with wobbles.
+  const pills = s.map((p, k) => {
+    const y1 = yOf(secOf(p.high)), y2 = yOf(secOf(p.low)), x = xOf(k), w = 11, col = p.dropped ? 'var(--upset)' : 'var(--calm)';
+    const fill = !p.dropped && (p.mild || p.esc) ? 'var(--surface)' : col;
+    return `<rect x="${(x - w / 2).toFixed(1)}" y="${(y1 - w / 2).toFixed(1)}" width="${w}" height="${(y2 - y1 + w).toFixed(1)}" rx="${w / 2}" fill="${fill}" stroke="${col}" stroke-width="2"/>`;
+  }).join('');
+  const hits = s.map((p, k) => `<rect x="${(k * step).toFixed(1)}" y="0" width="${step.toFixed(1)}" height="${H}" fill="transparent" data-progday="${p.date}" style="cursor:pointer"/>`).join('');
   const last = s[n - 1];
-  const best = Math.max.apply(null, s.map(p => p.maxCalm == null ? -1 : p.maxCalm));
-  const desc = `Working step over time. Now: ${stepLabel(last.end)}.` + (best >= 0 ? ` Longest calm rep so far: ${best === 0 ? 'front door only' : fmtSec(best)}.` : '');
+  const desc = `Working step over time. Now: ${stepLabel(last.end)}.`;
   const nm = x => x === 0 ? 'front door' : fmtSec(x);
-  const why2 = (selP.dropped ? ' · dropped back from ' + stepLabel(selP.dropFrom).replace(/^Out for /, '') + ' to ' + stepLabel(selP.dropTo).replace(/^Out for /, '') : '') + (selP.stalled ? ' · stalled: no net gain over 3 training days' : '');
-  const why = selP.easier === 'break' ? ' · started easier after a long break' : selP.easier === 'drop' ? ' · started easier after a step back' : '';
-  const cap1 = `<b>${esc(fmtDay(selP.date).replace(/\/\d{4}$/, ''))}</b> · ${esc(stepLabel(selP.start).replace(/^Out for /, ''))}${selP.end > selP.start ? ' → ' + esc(stepLabel(selP.end).replace(/^Out for /, '')) : selP.end < selP.start ? ' → ' + esc(stepLabel(selP.end).replace(/^Out for /, '')) + ' (stepped back)' : ''} · best calm ${selP.maxCalm == null ? 'none' : nm(selP.maxCalm)} · ${selP.reps} rep${selP.reps === 1 ? '' : 's'} (${selP.calm} calm${selP.alert ? ', ' + selP.alert + ' alert' : ''}${selP.mild ? ', ' + selP.mild + ' wobble' + (selP.mild === 1 ? '' : 's') : ''}${selP.esc ? ', ' + selP.esc + ' upset' + (selP.esc === 1 ? '' : 's') : ''})${why}${why2}`;
-  return `<div class="pgwrap" role="img" aria-label="${esc(desc)}"><svg class="pgaxis" viewBox="0 0 50 ${H}" width="50" height="${H}">${axis}</svg><div class="pgscroll"><svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}">${band}${grid}${xa}${segs}${stems}${cdots}${wdots}${rings}${tri}${ticks2}${hits}</svg></div></div>
+  const short = lv => stepLabel(lv).replace(/^Out for /, '');
+  const tags = (selP.dropped ? `<span class="tg drop">Dropped from ${esc(short(selP.dropFrom))} to ${esc(short(selP.dropTo))}</span>` : '')
+    + (selP.easier ? `<span class="tg easy">Started easier${selP.easier === 'break' ? ' after a break' : ' after a step back'}</span>` : '')
+    + (selP.stalled ? '<span class="tg stall">Stalled: no gain in 3 days</span>' : '');
+  const cap1 = `<b>${esc(fmtDay(selP.date).replace(/\/\d{4}$/, ''))}</b> · ${esc(short(selP.start))}${selP.end !== selP.start ? ' → ' + esc(short(selP.end)) : ''} · best calm ${selP.maxCalm == null ? 'none' : nm(selP.maxCalm)} · ${selP.calm} calm${selP.alert ? ', ' + selP.alert + ' alert' : ''}${selP.mild ? ', ' + selP.mild + ' wobble' + (selP.mild === 1 ? '' : 's') : ''}${selP.esc ? ', ' + selP.esc + ' upset' + (selP.esc === 1 ? '' : 's') : ''}${tags ? '<div class="tgs">' + tags + '</div>' : ''}`;
+  return `<div class="pgwrap" role="img" aria-label="${esc(desc)}"><svg class="pgaxis" viewBox="0 0 50 ${H}" width="50" height="${H}">${axis}</svg><div class="pgscroll"><svg viewBox="0 0 ${W.toFixed(1)} ${H}" width="${W.toFixed(1)}" height="${H}">${bands}${grid}${xa}${segs}${pills}${hits}</svg></div></div>
     <div class="progcap" aria-live="polite">${cap1}</div>
-    <div class="legend"><span><i class="lg-dot"></i>Working</span><span><i class="lg-dia"></i>Best calm</span><span><i class="lg-tri"></i>Easier start</span><span><i class="lg-tick"></i>Dropped</span><span><i class="lg-ring"></i>Stalled</span></div>
+    <div class="legend"><span><i class="lg-pill"></i>Day</span><span><i class="lg-pill hol"></i>Wobbles</span><span><i class="lg-pill red"></i>Dropped</span><span><i class="lg-dash"></i>Easier start</span><span><i class="lg-band"></i>Stalled</span></div>
 `;
 }
 function moreSec(id, title, body, forceOpen){
