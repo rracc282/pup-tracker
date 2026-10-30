@@ -1,6 +1,6 @@
 // Churro tracker app. Uses logic.js (pure) and Supabase (sync + push queue).
 'use strict';
-const APP_VERSION = '70';
+const APP_VERSION = '71';
 const CFG = window.PT_CONFIG || {};
 const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -797,8 +797,9 @@ function progressHtml(){
     if(show) xa += `<text x="${lx(k).toFixed(1)}" y="${floor + 28}" text-anchor="middle" font-size="9.5" fill="${k === sel ? 'var(--ink)' : 'var(--ink-2)'}"${k === sel ? ' font-weight="700"' : ''}>${p.date.slice(8)}/${p.date.slice(5, 7)}</text>`;
   });
   // Faint bars behind the line: cues she saw without a departure that day.
+  const CUE_FULL = 25;   // a bar this tall means 25 cues in a day
   const cueN = s.map(p => cuesOn(p.date)), cueMax = Math.max.apply(null, cueN.concat([0]));
-  const bars = cueMax ? cueN.map((c, k) => c ? `<rect x="${(xOf(k) - Math.min(9, step * 0.38)).toFixed(1)}" y="${(floor + 12 - (c / cueMax) * (floor - top) * 0.55).toFixed(1)}" width="${Math.min(18, step * 0.76).toFixed(1)}" height="${((c / cueMax) * (floor - top) * 0.55).toFixed(1)}" rx="3" fill="var(--ink-2)" opacity=".22"/>` : '').join('') : '';
+  const bars = cueMax ? cueN.map((c, k) => c ? `<rect x="${(xOf(k) - Math.min(9, step * 0.38)).toFixed(1)}" y="${(floor + 12 - (Math.min(c, CUE_FULL) / CUE_FULL) * (floor - top) * 0.55).toFixed(1)}" width="${Math.min(18, step * 0.76).toFixed(1)}" height="${((Math.min(c, CUE_FULL) / CUE_FULL) * (floor - top) * 0.55).toFixed(1)}" rx="3" fill="var(--ink-2)" opacity=".22"/>` : '').join('') : '';
   // Green band behind the selected day.
   const bands = `<rect x="${(sel * step).toFixed(1)}" y="0" width="${step.toFixed(1)}" height="${H}" fill="var(--calm-bg)"/>`;
   // One line through the longest calm rep of each day. A red piece of line means she stepped back: she dropped during the day, or started the next day easier.
