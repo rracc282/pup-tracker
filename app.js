@@ -1,6 +1,6 @@
 // Churro tracker app. Uses logic.js (pure) and Supabase (sync + push queue).
 'use strict';
-const APP_VERSION = '64';
+const APP_VERSION = '65';
 const CFG = window.PT_CONFIG || {};
 const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -751,7 +751,8 @@ function progressHtml(){
   const secOf = lv => (lv >= FIRST_OUT ? DUR[lv] : 0);
   // The scale grows with her progress, so early on the graph stays small and the first steps get room.
   const allTicks = [[0, 'Door only'], [2, '2 s'], [5, '5 s'], [10, '10 s'], [30, '30 s'], [60, '1 min'], [300, '5 min'], [900, '15 min'], [3600, '1 h'], [7200, '2 h'], [14400, '4 h goal']];
-  const reached = Math.max.apply(null, s.map(p => secOf(p.high)));
+  const bestOf = p => (p.maxCalm != null ? p.maxCalm : secOf(p.start));
+  const reached = Math.max.apply(null, s.map(p => Math.max(bestOf(p), secOf(p.high))));
   const cap = (allTicks.find(t => t[0] >= reached * 1.8 && t[0] >= 60) || allTicks[allTicks.length - 1])[0];
   const ticks = allTicks.filter(t => t[0] <= cap && (t[0] === 0 || t[0] >= 2) && (cap > 300 ? ![5, 30].includes(t[0]) : true));
   // One column per training day. The column width is chosen so a whole number of days fits, so no date is ever cut off.
@@ -771,25 +772,28 @@ function progressHtml(){
   s.forEach((p, k) => { xa += `<text x="${xOf(k).toFixed(1)}" y="${floor + 28}" text-anchor="middle" font-size="9.5" fill="${k === sel ? 'var(--ink)' : 'var(--ink-2)'}"${k === sel ? ' font-weight="700"' : ''}>${p.date.slice(8)}/${p.date.slice(5, 7)}</text>`; });
   // Green band behind the selected day.
   const bands = `<rect x="${(sel * step).toFixed(1)}" y="0" width="${step.toFixed(1)}" height="${H}" fill="var(--calm-bg)"/>`;
-  // One line through the working step she started each day on. Dashed dark green = she started that day easier.
+  // One line through the longest calm rep of each day. A red piece of line means she stepped back: she dropped during the day, or started the next day easier.
   let segs = '';
   for(let k = 1; k < n; k++){
-    segs += `<line x1="${xOf(k - 1).toFixed(1)}" y1="${yOf(secOf(s[k - 1].start)).toFixed(1)}" x2="${xOf(k).toFixed(1)}" y2="${yOf(secOf(s[k].start)).toFixed(1)}" stroke="${s[k].easier ? 'var(--back)' : 'var(--calm)'}" stroke-width="2.5" stroke-linecap="round"${s[k].easier ? ' stroke-dasharray="5 4"' : ''}/>`;
+    const back = s[k - 1].dropped || s[k].easier;
+    segs += `<line x1="${xOf(k - 1).toFixed(1)}" y1="${yOf(bestOf(s[k - 1])).toFixed(1)}" x2="${xOf(k).toFixed(1)}" y2="${yOf(bestOf(s[k])).toFixed(1)}" stroke="${back ? 'var(--upset)' : 'var(--calm)'}" stroke-width="2.5" stroke-linecap="round"/>`;
   }
-  // Red dot = she dropped back that day. Dark green triangle = she started the day easier.
-  const dots = s.map((p, k) => `<circle cx="${xOf(k).toFixed(1)}" cy="${yOf(secOf(p.start)).toFixed(1)}" r="${k === sel ? 5 : 3.5}" fill="${p.dropped ? 'var(--upset)' : p.easier ? 'var(--back)' : 'var(--calm)'}"/>`).join('');
-  const tri = s.map((p, k) => p.easier ? `<polygon points="${(xOf(k) - 4.5).toFixed(1)},${(yOf(secOf(p.start)) + 9).toFixed(1)} ${(xOf(k) + 4.5).toFixed(1)},${(yOf(secOf(p.start)) + 9).toFixed(1)} ${xOf(k).toFixed(1)},${(yOf(secOf(p.start)) + 15).toFixed(1)}" fill="var(--back)"/>` : '').join('');
+  // Last day dropped and nothing after it yet: a short red tail down to the step she was moved to.
+  const lp = s[n - 1];
+  if(lp.dropped) segs += `<line x1="${xOf(n - 1).toFixed(1)}" y1="${yOf(bestOf(lp)).toFixed(1)}" x2="${(xOf(n - 1) + step * 0.35).toFixed(1)}" y2="${yOf(secOf(lp.dropTo)).toFixed(1)}" stroke="var(--upset)" stroke-width="2.5" stroke-linecap="round"/>`;
+  const dots = s.map((p, k) => `<circle cx="${xOf(k).toFixed(1)}" cy="${yOf(bestOf(p)).toFixed(1)}" r="${k === sel ? 5 : 3.5}" fill="${p.maxCalm == null ? 'var(--surface)' : 'var(--calm)'}" stroke="var(--calm)" stroke-width="${p.maxCalm == null ? 2 : 0}"/>`).join('');
+  const tri = '';
   const hits = s.map((p, k) => `<rect x="${(k * step).toFixed(1)}" y="0" width="${step.toFixed(1)}" height="${H}" fill="transparent" data-progday="${p.date}" style="cursor:pointer"/>`).join('');
   const last = s[n - 1];
-  const desc = `Working step over time. Now: ${stepLabel(last.end)}.`;
+  const desc = `Longest calm rep each day. Working step now: ${stepLabel(last.end)}.`;
   const nm = x => x === 0 ? 'front door' : fmtSec(x);
   const short = lv => stepLabel(lv).replace(/^Out for /, '');
-  const tags = (selP.dropped ? `<span class="tg drop">Dropped from ${esc(short(selP.dropFrom))} to ${esc(short(selP.dropTo))}</span>` : '')
-    + (selP.easier ? `<span class="tg easy">Started easier${selP.easier === 'break' ? ' after a break' : ' after a step back'}</span>` : '');
+  const tags = (selP.dropped ? `<span class="tg drop">Stepped back from ${esc(short(selP.dropFrom))} to ${esc(short(selP.dropTo))}</span>` : '')
+    + (selP.easier ? `<span class="tg drop">Started easier${selP.easier === 'break' ? ' after a break' : ' after a step back'}</span>` : '');
   const cap1 = `<b>${esc(fmtDay(selP.date).replace(/\/\d{4}$/, ''))}</b> · ${esc(short(selP.start))}${selP.end !== selP.start ? ' → ' + esc(short(selP.end)) : ''} · best calm ${selP.maxCalm == null ? 'none' : nm(selP.maxCalm)} · ${selP.calm} calm${selP.alert ? ', ' + selP.alert + ' alert' : ''}${selP.mild ? ', ' + selP.mild + ' wobble' + (selP.mild === 1 ? '' : 's') : ''}${selP.esc ? ', ' + selP.esc + ' upset' + (selP.esc === 1 ? '' : 's') : ''}${tags ? '<div class="tgs">' + tags + '</div>' : ''}`;
   return `<div class="pgwrap" role="img" aria-label="${esc(desc)}"><svg class="pgaxis" viewBox="0 0 50 ${H}" width="50" height="${H}">${axis}</svg><div class="pgscroll"><svg viewBox="0 0 ${W.toFixed(1)} ${H}" width="${W.toFixed(1)}" height="${H}">${bands}${grid}${xa}${segs}${dots}${tri}${hits}</svg></div></div>
     <div class="progcap" aria-live="polite">${cap1}</div>
-    <div class="legend"><span><i class="lg-dot"></i>Working step</span><span><i class="lg-dot red"></i>Dropped</span><span><i class="lg-tri"></i>Started easier</span></div>
+    <div class="legend"><span><i class="lg-dot"></i>Longest calm rep</span><span><i class="lg-line"></i>Stepped back</span></div>
 `;
 }
 function moreSec(id, title, body, forceOpen){
