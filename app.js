@@ -1,6 +1,6 @@
 // Churro tracker app. Uses logic.js (pure) and Supabase (sync + push queue).
 'use strict';
-const APP_VERSION = '78';
+const APP_VERSION = '79';
 const CFG = window.PT_CONFIG || {};
 const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -340,7 +340,8 @@ function maybeDeepLink(){
 
 // ---------- computed bits ----------
 function todayDeps(){ const t = todayStr(); return liveEntries().filter(e => e.kind === 'dep' && e.date === t); }
-function catCount(step){ return todayDeps().filter(e => isQuick(e.step) === isQuick(step)).length; }
+// Warm-ups do not use up the longer-rep limit (they still count in the 15 reps in total).
+function catCount(step){ return todayDeps().filter(e => isQuick(e.step) === isQuick(step) && (isQuick(step) || !e.warm)).length; }
 function catLimit(step){ return isQuick(step) ? QUICK_CEILING : ceilingFor(new Date(), dayType()); }
 function totalReached(){ return todayDeps().length >= TOTAL_CEILING; }
 function capReached(step){ return totalReached() || catCount(step) >= catLimit(step); }
@@ -697,7 +698,7 @@ function renderToday(){
   const w = deps.filter(e => e.outcome === 'mild').length;
   const u = deps.filter(e => e.outcome === 'escalated').length;
   const cueN = deps.filter(e => isQuick(e.step)).length;
-  const outN = deps.length - cueN;
+  const outN = deps.filter(e => !isQuick(e.step) && !e.warm).length;
   const rests = liveEntries().filter(e => e.kind === 'rest' && e.date === t).length;
   $('restBtn').disabled = ui.mode !== 'idle';
   const st = stateNow(ladderEntries(), place);
@@ -982,6 +983,7 @@ async function saveRep(outcome){
     data = Object.assign(base, { kind:'dep', ladderVer: LADDER_VER, level: before.level, step:r.step, early: !!r.early });
     if(DUR[r.step] != null) data.targetSec = DUR[r.step];
     if(r.byPlan) data.byPlan = true;
+    if(r.warm) data.warm = true;
     if(data.medicated) msg = ['Logged as medicated.', 'It does not move your step.'];
     else {
       const after = stateNow(live.concat([data]), r.place);
@@ -1010,6 +1012,11 @@ function startRep(step){
   qCancelKind('ready');
   const rep = { kind:'dep', step, place, startedAt:null, alerted:false, pre: ui.pre || null };
   ui.pre = null;
+  { // Remember whether this is the app's warm-up rep: warm-ups do not use up the day's longer-rep limit.
+    const live = ladderEntries(), st0 = stateNow(live, place);
+    const nx0 = pickNext(st0, effPocket(st0), place + '|' + depsFor(live, place).length + '|' + st0.level, { warm: warmupPlan(depsFor(live, place), st0, Date.now()) });
+    if(nx0.kind === 'warmup' && nx0.step === step) rep.warm = true;
+  }
   if(step >= FIRST_OUT && DUR[step] > UNTIMED_MAX){ ui.mode = 'prep'; ui.rep = rep; }
   else if(step >= FIRST_OUT){ rep.untimed = true; rep.startedAt = Date.now(); ui.mode = 'run'; ui.rep = rep; scheduleForgot(rep, 60); }
   else { rep.startedAt = Date.now(); ui.mode = 'run'; ui.rep = rep; primeAudio(); startTicking(); scheduleForgot(rep, 60); }
