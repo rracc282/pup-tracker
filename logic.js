@@ -1,4 +1,4 @@
-const LOGIC_VERSION = '75';
+const LOGIC_VERSION = '76';
 // Pure training logic. No DOM, no network. Loaded by index.html and tested in node.
 // One ladder. Steps 0-5: a cue while she watches. 6-12: cues while she is behind the closed door. 13 and up: seconds spent outside.
 // Time outside per step. Every step has a stable id ('out.<seconds>'), so inserting steps never changes saved history.
@@ -61,6 +61,12 @@ const CAP3_FROM = '2026-10-24';
 const RESTLESS_FROM = '2026-10-30';
 // From this day: one alert repeats the step, a second alert in a row makes the next rep easier (the count stays), a third in a row counts as a wobble.
 const ALERT2_FROM = '2026-10-30';
+// From this day, on every departure step: she moves up once 5 reps at the working step are done and at least 4 of the last 5 were calm and awake.
+// A wobble, an alert or a calm rep while asleep is the one allowed slip. Repeat as long as needed.
+let WIN_FROM = '2026-10-31';
+const WIN_SIZE = 5, WIN_GOOD = 4;
+function setWinFrom(d){ WIN_FROM = d; }   // for the tests only
+function runText(st){ return st.winOn ? st.win.good + ' of ' + WIN_GOOD + ' calm and awake, ' + st.win.n + ' of ' + WIN_SIZE + ' reps' : st.run + ' of ' + st.need + ' calm in a row'; }
 function restlessSkip(e){ return !!e && e.date >= RESTLESS_FROM && (e.tags || []).includes('Restless before') && (e.outcome === 'mild' || e.outcome === 'alert'); }
 function capV2a(level){ return level <= 5 ? 3 : level <= 11 ? 2 : level > GATE && DUR[level] <= 10 ? 2 : DUR[level] <= 60 ? 1 : DUR[level] <= 240 ? 2 : 1; }
 // The stricter rules above apply from this day on. Reps logged before it are replayed under the rules she trained with,
@@ -95,13 +101,13 @@ function isLive(e){ return !e.voided; }
 function computeState(depList, startLevel, asOf){
   let level = depList.length && depList[0].level != null ? depList[0].level : startLevel, prevDate = null, alertRun = 0, alertConv = false, eased = null, restlessRun = 0;
   const dayStart = {}, backDay = {};
-  let rough = {}, dayAw = {}, run = 0, runDates = new Set(), runAwake = 0, wob = 0, wobMin = null, badStep = null, nextEasy = false, lastEvent = null, lastEasy = false;
+  let win = [], rough = {}, dayAw = {}, run = 0, runDates = new Set(), runAwake = 0, wob = 0, wobMin = null, badStep = null, nextEasy = false, lastEvent = null, lastEasy = false;
   const adv = {}, drops = [];
   for(const e of depList){
     if((e.ladderVer == null ? LADDER_VER : e.ladderVer) !== LADDER_VER && e.level != null) level = e.level;   // reps from an older step list keep their recorded step
     // Back after a long break (Home only): start one step easier.
     if(prevDate != null && e.date !== prevDate && (e.place || 'home') === 'home' && e.date >= BREAK_FROM && dayNum(e.date) - dayNum(prevDate) >= BREAK_DAYS && level > 0){
-      level--; run = 0; runDates = new Set(); runAwake = 0; dayAw = {}; wob = 0; wobMin = null; alertRun = 0;
+      level--; run = 0; runDates = new Set(); runAwake = 0; dayAw = {}; win = []; wob = 0; wobMin = null; alertRun = 0;
     }
     if(dayStart[e.date] === undefined){ dayStart[e.date] = level; backDay[e.date] = prevDate != null && dayNum(e.date) - dayNum(prevDate) - 1 >= AWAY_DAYS; }
     prevDate = e.date;
@@ -119,21 +125,26 @@ function computeState(depList, startLevel, asOf){
       lastEvent = 'restless';
     } else if(oc === 'alert'){
       lastEvent = (e.date >= ALERT2_FROM && alertRun === 2) ? 'alert2' : 'alert';
+      if(hard && e.date >= WIN_FROM && level >= FIRST_OUT){ win.push('n'); if(win.length > WIN_SIZE) win.shift(); run = win.filter(x => x === 'g').length; }
     } else if(oc === 'calm'){
       wob = 0; wobMin = null;
       if(hard){
-        run++; runDates.add(e.date); if(!(e.tags||[]).includes('Asleep before')){ runAwake++; dayAw[e.date] = (dayAw[e.date] || 0) + 1; }
+        const useWin = e.date >= WIN_FROM && level >= FIRST_OUT;
+        const awake = !(e.tags||[]).includes('Asleep before');
+        let ready = false;
+        if(useWin){ win.push(awake ? 'g' : 'n'); if(win.length > WIN_SIZE) win.shift(); run = win.filter(x => x === 'g').length; ready = win.length >= WIN_SIZE && run >= WIN_GOOD; }
+        else { run++; runDates.add(e.date); if(awake){ runAwake++; dayAw[e.date] = (dayAw[e.date] || 0) + 1; } }
         const v2 = e.date >= RULES_V2_FROM, needNow = !v2 ? needV1(level) : (e.date >= NEED3_FROM ? need(level) : needV2a(level)), capNow = !v2 ? capV1(level) : (e.date >= CAP3_FROM ? capFor(level) : capV2a(level));
-        if(run >= needNow){
+        if(useWin ? ready : run >= needNow){
           const used = adv[e.date] || 0;
-          if(level >= TOP){ run = 0; runDates = new Set(); runAwake = 0; dayAw = {}; lastEvent = 'top'; }
+          if(level >= TOP){ run = 0; runDates = new Set(); runAwake = 0; dayAw = {}; win = []; lastEvent = 'top'; }
           else if(v2 && level === GATE && gateDays(dayAw) < GATE_DAYS){ lastEvent = 'gate'; }   // needs awake calm reps on two different days
-          else if(v2 && level > GATE && runAwake < awakeNeed(needNow)){ lastEvent = 'awake'; }   // calm, but too many asleep reps
-          else if(v2 && rough[e.date]){ run = needNow; lastEvent = 'roughDay'; }   // a wobble or upset earlier today: no step-up until tomorrow
-          else if(used < capNow && !(e.date >= CLIMB_FROM && ((backDay[e.date] && used >= 1 && level >= FIRST_OUT) || (level >= FIRST_OUT && DUR[dayStart[e.date]] > 0 && DUR[level + 1] > CLIMB_RATIO * DUR[dayStart[e.date]] + 1e-9)))){ level++; run = 0; runDates = new Set(); runAwake = 0; dayAw = {}; adv[e.date] = used + 1; lastEvent = 'advance'; }
-          else { run = needNow; lastEvent = 'capped'; }
+          else if(!useWin && v2 && level > GATE && runAwake < awakeNeed(needNow)){ lastEvent = 'awake'; }   // calm, but too many asleep reps
+          else if(v2 && rough[e.date]){ if(!useWin) run = needNow; lastEvent = 'roughDay'; }   // a wobble or upset earlier today: no step-up until tomorrow
+          else if(used < capNow && !(e.date >= CLIMB_FROM && ((backDay[e.date] && used >= 1 && level >= FIRST_OUT) || (level >= FIRST_OUT && DUR[dayStart[e.date]] > 0 && DUR[level + 1] > CLIMB_RATIO * DUR[dayStart[e.date]] + 1e-9)))){ level++; run = 0; runDates = new Set(); runAwake = 0; dayAw = {}; win = []; adv[e.date] = used + 1; lastEvent = 'advance'; }
+          else { if(!useWin) run = needNow; lastEvent = 'capped'; }
         } else {
-          lastEvent = 'calmProgress';
+          lastEvent = (useWin && !awake) ? 'calmAsleep' : 'calmProgress';
           nextEasy = (run === 1 && level >= FIRST_OUT);
         }
       } else {
@@ -141,22 +152,26 @@ function computeState(depList, startLevel, asOf){
       }
     } else if(oc === 'mild'){
       if(e.date < WOBBLE_OK_FROM) rough[e.date] = true;
-      run = 0; runDates = new Set(); runAwake = 0; dayAw = {}; wob++; badStep = e.step; wobMin = wobMin == null ? e.step : Math.min(wobMin, e.step);
+      if(hard && e.date >= WIN_FROM && level >= FIRST_OUT){ win.push('w'); if(win.length > WIN_SIZE) win.shift(); run = win.filter(x => x === 'g').length; }   // one allowed slip
+      else { run = 0; runDates = new Set(); runAwake = 0; dayAw = {}; win = []; }
+      wob++; badStep = e.step; wobMin = wobMin == null ? e.step : Math.min(wobMin, e.step);
       // Two wobbles in a row: drop one step, or two when the wobbles happened on easier steps than the working one,
       // so the new working step is never above where she actually struggled.
-      if(wob >= 2){ const f = level; level = Math.max(0, Math.min(level - 1, Math.max(level - 2, wobMin - 1))); wob = 0; wobMin = null; lastEvent = 'wobbleDrop'; if(level < f) drops.push({ from: f, to: level, why: 'wobbles' }); }
+      if(wob >= 2){ const f = level; level = Math.max(0, Math.min(level - 1, Math.max(level - 2, wobMin - 1))); wob = 0; wobMin = null; win = []; run = 0; lastEvent = 'wobbleDrop'; if(level < f) drops.push({ from: f, to: level, why: 'wobbles' }); }
       else lastEvent = 'wobble';
     } else if(oc === 'escalated'){
       rough[e.date] = true;
-      { const f = level; level = Math.max(0, level - 2); run = 0; runDates = new Set(); runAwake = 0; dayAw = {}; wob = 0; wobMin = null; badStep = e.step; lastEvent = 'upset'; if(level < f) drops.push({ from: f, to: level, why: 'upset' }); }
+      { const f = level; level = Math.max(0, level - 2); run = 0; runDates = new Set(); runAwake = 0; dayAw = {}; win = []; wob = 0; wobMin = null; badStep = e.step; lastEvent = 'upset'; if(level < f) drops.push({ from: f, to: level, why: 'upset' }); }
     }
   }
   // Today has no rep yet and the last training day was 7 or more days ago: show the easier start already.
   if(asOf && prevDate != null && asOf > prevDate && asOf >= BREAK_FROM && dayNum(asOf) - dayNum(prevDate) >= BREAK_DAYS && level > 0){
     eased = { from: level, days: dayNum(asOf) - dayNum(prevDate) };
-    level--; run = 0; runDates = new Set(); runAwake = 0; dayAw = {}; wob = 0; wobMin = null; badStep = null; nextEasy = false; lastEasy = false; lastEvent = null;
+    level--; run = 0; runDates = new Set(); runAwake = 0; dayAw = {}; win = []; wob = 0; wobMin = null; badStep = null; nextEasy = false; lastEasy = false; lastEvent = null;
   }
-  return { eased, level, run, runDays: level === GATE ? gateDays(dayAw) : runDates.size, gate: level === GATE, wob, nextEasy, lastEasy, lastEvent, alertConv, restlessRun, badStep, need: need(level), drops };
+  const winOn = level >= FIRST_OUT && ((asOf && asOf >= WIN_FROM) || (prevDate != null && prevDate >= WIN_FROM));
+  if(winOn) run = win.filter(x => x === 'g').length;
+  return { eased, level, run, runDays: level === GATE ? gateDays(dayAw) : runDates.size, gate: level === GATE, wob, nextEasy, lastEasy, lastEvent, alertConv, restlessRun, badStep, need: winOn ? WIN_GOOD : need(level), drops, winOn, win: { n: win.length, good: win.filter(x => x === 'g').length } };
 }
 
 // A "baseline" entry says: my step is N from here on (set by hand). Reps before it no longer count.
@@ -372,7 +387,9 @@ function coachMsg(ev, st){
   switch(ev){
     case 'advance': return ['Calm. Step up.', 'Next: ' + stepLabel(st.level) + '.'];
     case 'top': return ['Calm at the top step.', 'This is the goal. Keep it regular and varied.'];
+    case 'calmAsleep': return ['Calm, but she was asleep.', 'It counts as one of the 5 reps, but 4 of the 5 at this step must be calm and awake. Aim for the next rep while she is awake.'];
     case 'calmProgress':
+      if(st && st.winOn) return ['Calm.', st.win.good + ' of 4 calm and awake so far, ' + st.win.n + ' of 5 reps. Repeat this step until 4 of 5 are calm and awake, then you move up.' + ' Some reps in between are easier on purpose and do not count.'];
       return ['Calm.', (st.need - st.run) + ' more calm in a row at this step and you move up.' + (st.level >= 2 ? ' Some reps in between are easier on purpose and do not count.' : '')];
     case 'easyOk': return ['Good.', 'Easier reps keep her confident. They do not count toward moving up.'];
     case 'roughDay': return ['Calm, but not a step-up day.', 'She had an upset earlier today, so you stay at this step and move up tomorrow.'];
@@ -382,7 +399,7 @@ function coachMsg(ev, st){
     case 'restless': return st && st.restlessRun >= 2
       ? ['Restless again. Stop for now.', 'Two reps in a row started with her restless. Neither counts against her. Meet her needs first (a sniff walk, a chew, some play), then try again later when she settles on her own.']
       : ['She was restless before this rep.', 'It does not count against her and your count stays. Wait until she lies down and settles on her own before the next rep. If it happens again, stop for now.'];
-    case 'alert': return ['Alert.', 'Quiet, but she showed early stress signs. This rep does not count and your count stays. Repeat this step. If it happens again, the next rep is easier.'];
+    case 'alert': return st && st.winOn ? ['Alert.', 'Quiet, but she showed early stress signs. It counts as one of the 5 reps but not as a calm one. Repeat this step. If it happens again, the next rep is easier.'] : ['Alert.', 'Quiet, but she showed early stress signs. This rep does not count and your count stays. Repeat this step. If it happens again, the next rep is easier.'];
     case 'alert2': return ['Second alert in a row.', 'This rep does not count and your count stays. The next rep is easier, as a breather. A third alert in a row counts as a wobble.'];
     case 'wobble': return st && st.alertConv ? ['Third alert in a row.', 'That counts as a wobble: the count restarts and the next rep is easier. This is what her edge looks like.'] : ['Small wobble.', 'Repeat this step. This is what her edge looks like.'];
     case 'wobbleDrop': return [st && st.alertConv ? 'Third alert, and two wobbles in a row.' : 'Two wobbles in a row.', 'You drop a step or two, to below where she struggled, and build back up. The next rep is easier.'];
@@ -507,7 +524,7 @@ function buildSummary(entries, days, date, place){
   if(placesUsed.indexOf(place) < 0) placesUsed.unshift(place);
   placesUsed.forEach(p => {
     const sp = stateFrom(live, p);
-    L.push('- ' + (PLACE_LABEL[p] || p) + (p === place ? ' (today)' : '') + ': ' + stepLabel(sp.level) + ' (step ' + (sp.level + 1) + ' of ' + (TOP + 1) + '), ' + sp.run + ' of ' + sp.need + ' calm in a row' + (sp.level === GATE ? ', on ' + sp.runDays + ' of ' + GATE_DAYS + ' days needed' : '') + '.');
+    L.push('- ' + (PLACE_LABEL[p] || p) + (p === place ? ' (today)' : '') + ': ' + stepLabel(sp.level) + ' (step ' + (sp.level + 1) + ' of ' + (TOP + 1) + '), ' + runText(sp) + (sp.level === GATE ? ', on ' + sp.runDays + ' of ' + GATE_DAYS + ' days needed' : '') + '.');
   });
   L.push('Today: ' + dayDeps.length + ' reps (' + c + ' calm, ' + al + ' alert, ' + w + ' wobble, ' + u + ' upset), ' + rests.length + ' rest blocks' + (rests.length ? ' (' + rests.map(r => (r.minutes != null ? r.minutes : '?') + ' min ' + (OUT_LABEL[r.outcome] || '')).join(', ') + ')' : '') + ', alone time: ' + (alone.length ? alone.map(a => a.minutes + ' min ' + (OUT_LABEL[a.outcome] || '') + (a.trazodone ? ' (trazodone given)' : '')).join(', ') : 'none') + '.');
   const cuesOf = d => { const c = live.find(e => e.kind === 'cues' && e.date === d); return c ? (c.count || 0) : 0; };
@@ -582,4 +599,4 @@ function buildSummary(entries, days, date, place){
   return L.join('\n');
 }
 
-if(typeof module !== 'undefined') module.exports = { MILESTONES, DUR, TOP, FIRST_OUT, LAST_CUE, QUICK_CEILING, isQuick, STEP_NAMES, CUE_IDS, idOf, indexOfId, stepLabel, stepTag, stepEst, gapSec, fits, need, capFor, sortedByDate, computeState, depsFor, stateFrom, baselineFor, startFor, skippedRanges, barInfo, levelsAfter, rand01, pickNext, ceilingFor, cooldownMs, waitUntil, coachMsg, normalizeEntry, buildSummary, fmtSec, sessionCount, isTiny, restSec, SESSION_MIN, SESSION_MAX, sessionSizeFor, breakMinFor, isSessionStart, warmupPlan, restlessSkip, ALERT2_FROM, RESTLESS_FROM, RULES_V2_FROM, CLIMB_FROM, CAP3_FROM, LADDER_VER, shorterStep, GATE, GATE_DAYS, GATE_DAY_REPS, dateAdd, helpAlerts, windowStats, weekCompare, progressSeries };
+if(typeof module !== 'undefined') module.exports = { MILESTONES, DUR, TOP, FIRST_OUT, LAST_CUE, QUICK_CEILING, isQuick, STEP_NAMES, CUE_IDS, idOf, indexOfId, stepLabel, stepTag, stepEst, gapSec, fits, need, capFor, sortedByDate, computeState, depsFor, stateFrom, baselineFor, startFor, skippedRanges, barInfo, levelsAfter, rand01, pickNext, ceilingFor, cooldownMs, waitUntil, coachMsg, normalizeEntry, buildSummary, fmtSec, sessionCount, isTiny, restSec, SESSION_MIN, SESSION_MAX, sessionSizeFor, breakMinFor, isSessionStart, warmupPlan, restlessSkip, ALERT2_FROM, setWinFrom, WIN_SIZE, WIN_GOOD, runText, RESTLESS_FROM, RULES_V2_FROM, CLIMB_FROM, CAP3_FROM, LADDER_VER, shorterStep, GATE, GATE_DAYS, GATE_DAY_REPS, dateAdd, helpAlerts, windowStats, weekCompare, progressSeries };

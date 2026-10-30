@@ -1,4 +1,5 @@
 const assert=require('assert'), L=require('../logic.js');
+L.setWinFrom('2999-01-01');   // the older tests describe the rules before the five-rep window
 const mk=(o)=>Object.assign({kind:'dep',place:'home',date:'2026-10-07',createdAt:0,outcome:'calm'},o);
 let t=1000, id=0;
 const rep=(step,outcome,extra)=>mk(Object.assign({id:'r'+(id++),step,outcome,createdAt:(t+=60000)},extra||{}));
@@ -462,3 +463,29 @@ console.log('logic tests (first day back, cues) ok');
   // an upset on a restless start still counts
   assert.strictEqual(L.restlessSkip(R(s0,'escalated',['Restless before'])),false);
   console.log('logic tests (restless start) ok'); }
+
+// five reps, four of them calm and awake (departure steps, from 31 Oct 2026)
+{ L.setWinFrom('2026-10-31');
+  let n=0,T=Date.UTC(2026,10,3,8); const R=(step,outcome,tags,date)=>mk({id:'w'+(n++),date:date||'2026-11-03',step,level:step,outcome,tags:tags||[],createdAt:(T+=900000)});
+  const s=L.DUR.indexOf(40), a=['Awake before'], z=['Asleep before'];
+  let st=L.computeState([R(s,'calm',a),R(s,'calm',a),R(s,'calm',a)],0,'2026-11-03'); assert.strictEqual(st.level,s,'3 calm is not enough'); assert.strictEqual(st.winOn,true); assert.strictEqual(st.win.n,3); assert.strictEqual(st.win.good,3);
+  st=L.computeState([1,2,3,4].map(()=>R(s,'calm',a)),0,'2026-11-03'); assert.strictEqual(st.level,s,'4 reps are not enough');
+  st=L.computeState([1,2,3,4,5].map(()=>R(s,'calm',a)),0,'2026-11-03'); assert.strictEqual(st.level,s+1,'5 calm awake reps move up');
+  // one slip allowed: wobble, asleep or alert among five
+  st=L.computeState([R(s,'calm',a),R(s,'mild'),R(s,'calm',a),R(s,'calm',a),R(s,'calm',a)],0,'2026-11-03'); assert.strictEqual(st.level,s+1,'4 of 5 with a wobble moves up');
+  st=L.computeState([R(s,'calm',z),R(s,'calm',a),R(s,'calm',a),R(s,'calm',a),R(s,'calm',a)],0,'2026-11-03'); assert.strictEqual(st.level,s+1,'4 of 5 with a sleeping rep moves up');
+  st=L.computeState([R(s,'calm',a),R(s,'alert'),R(s,'calm',a),R(s,'calm',a),R(s,'calm',a)],0,'2026-11-03'); assert.strictEqual(st.level,s+1,'4 of 5 with an alert moves up');
+  // two slips: not yet, keeps going until 4 of the last 5 are good
+  st=L.computeState([R(s,'calm',a),R(s,'calm',z),R(s,'calm',z),R(s,'calm',a),R(s,'calm',a)],0,'2026-11-03'); assert.strictEqual(st.level,s,'3 of 5 is not enough');
+  st=L.computeState([R(s,'calm',a),R(s,'calm',z),R(s,'calm',z),R(s,'calm',a),R(s,'calm',a),R(s,'calm',a),R(s,'calm',a)],0,'2026-11-03'); assert.strictEqual(st.level,s+1,'sliding window: 4 of the last 5');
+  // easier reps do not count, a wobble on an easier step resets the window
+  st=L.computeState([R(s,'calm',a),R(s,'calm',a),R(s-2,'calm',a),R(s,'calm',a),R(s,'calm',a)],0,'2026-11-03'); assert.strictEqual(st.level,s,'easier rep did not count');
+  // two wobbles in a row still drop her; an upset drops two
+  st=L.computeState([R(s,'calm',a),R(s,'mild'),R(s,'mild')],0,'2026-11-03'); assert(st.level<s,'two wobbles drop'); assert.strictEqual(st.win.n,0);
+  // restless start is not counted at all
+  st=L.computeState([R(s,'calm',a),R(s,'mild',['Restless before']),R(s,'calm',a)],0,'2026-11-03'); assert.strictEqual(st.win.n,2);
+  // before the start date the old rule stands: 3 calm in a row moves up
+  st=L.computeState([R(s,'calm',a,'2026-10-29'),R(s,'calm',a,'2026-10-29'),R(s,'calm',a,'2026-10-29')],0,'2026-10-29'); assert.strictEqual(st.winOn,false); assert.strictEqual(st.level,s+1,'old rule before 31 Oct');
+  assert(/calm and awake/.test(L.runText(L.computeState([R(s,'calm',a)],0,'2026-11-03'))));
+  assert(/Calm\./.test(L.coachMsg('calmProgress',L.computeState([R(s,'calm',a)],0,'2026-11-03'))[0]));
+  L.setWinFrom('2999-01-01'); console.log('logic tests (five-rep window) ok'); }

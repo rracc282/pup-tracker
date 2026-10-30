@@ -1,6 +1,6 @@
 // Churro tracker app. Uses logic.js (pure) and Supabase (sync + push queue).
 'use strict';
-const APP_VERSION = '75';
+const APP_VERSION = '76';
 const CFG = window.PT_CONFIG || {};
 const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -385,7 +385,7 @@ function renderPos(){
   renderProgressBox();
   const st = stateNow(ladderEntries(), place);
   $('posNow').textContent = stepLabel(st.level);
-  $('posStep').textContent = 'Step ' + (st.level+1) + ' of ' + (TOP+1) + ' · ' + st.run + ' of ' + st.need + ' calm' + (st.gate ? ' · ' + st.runDays + ' of 2 days' : '') + ' · goal 4 h';
+  $('posStep').textContent = 'Step ' + (st.level+1) + ' of ' + (TOP+1) + ' · ' + (st.winOn ? st.win.good + ' of ' + WIN_GOOD + ' calm and awake · ' + st.win.n + ' of ' + WIN_SIZE : st.run + ' of ' + st.need + ' calm') + (st.gate ? ' · ' + st.runDays + ' of 2 days' : '') + ' · goal 4 h';
   const pct = v => (v / TOP * 100) + '%';
   const info = barInfo(ladderEntries(), place);
   let clip = `<div id="posFill" style="width:${pct(st.level)}"></div>`;
@@ -610,7 +610,7 @@ function renderRep(){
     else if(nx.afterWobble) sub = 'Easier on purpose after the wobble.';
     else if(nx.afterAlert2) sub = 'Easier on purpose after the second alert.';
     else if(nx.easy) sub = 'Shorter on purpose, to keep her confident.';
-    else sub = 'Working step · ' + st.run + ' of ' + st.need + ' calm in a row' + (st.gate ? ', on ' + st.runDays + ' of 2 days needed' : '') + '.';
+    else sub = 'Working step · ' + runText(st) + (st.gate ? ', on ' + st.runDays + ' of 2 days needed' : '') + '.';
     const capLeft = Math.max(1, catLimit(nx.step) - catCount(nx.step));
     const fitN = pocketMatters(st) ? Math.min(SESSION_MAX, capLeft, Math.max(1, Math.floor(pocket * 60 / (stepEst(nx.step) + gapSec(nx.step))))) : 1;
     const blocked = (!!waitInfo() || capReached(nx.step)) && !ui.override;

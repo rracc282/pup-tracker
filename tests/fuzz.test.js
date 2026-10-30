@@ -2,6 +2,7 @@ const L=require('../logic.js'), assert=require('assert');
 let seed=12345; const rnd=()=>{seed=(seed*1664525+1013904223)>>>0;return seed/4294967296;};
 const TOP=L.TOP; let fails=[]; let n=0;
 function check(c,msg,ctx){ if(!c){ fails.push(msg+' '+JSON.stringify(ctx||{})); } n++; }
+for(const WINFROM of ['2999-01-01','2026-10-31']){ L.setWinFrom(WINFROM);
 for(let run=0;run<600;run++){
   const start=Math.floor(rnd()*(TOP+1)); const pFail=[0.05,0.2,0.4][run%3]; const pUp=0.1*rnd();
   let list=[]; let t=Date.parse('2026-11-01T08:00:00Z'); let day=0; let prevSt=L.computeState([],start);
@@ -23,13 +24,14 @@ for(let run=0;run<600;run++){
     if(out!=='calm') check(nx.level<=st.level,'level rose on a non-calm rep',{from:st.level,to:nx.level,out});
     if(out==='calm') check(nx.level<=st.level+1,'jumped more than one step',{from:st.level,to:nx.level});
     if(out==='calm'&&pk.step<st.level) check(nx.level===st.level,'advanced on an easier rep',{lvl:st.level,step:pk.step,to:nx.level});
-    if(out==='alert'&&(nx.lastEvent==='alert'||nx.lastEvent==='alert2')) check(nx.level===st.level&&nx.run===st.run,'alert changed level or count',{from:st.level,run:st.run,to:nx.level,r2:nx.run});
+    if(out==='alert'&&(nx.lastEvent==='alert'||nx.lastEvent==='alert2')) check(nx.level===st.level&&(nx.winOn||nx.run===st.run),'alert changed level or count',{from:st.level,run:st.run,to:nx.level,r2:nx.run});
     if(out==='alert'&&nx.lastEvent!=='alert'&&nx.lastEvent!=='alert2') check(nx.alertConv===true,'second alert not treated as wobble',{ev:nx.lastEvent});
     if(out==='escalated') check(nx.level===Math.max(0,st.level-2),'upset drop not 2',{from:st.level,to:nx.level});
     if(out==='mild'&&nx.lastEvent==='wobbleDrop'){ check(st.level===0?nx.level===0:(nx.level<=st.level-1&&nx.level>=Math.max(0,st.level-2)),'wobble drop outside 1-2',{from:st.level,to:nx.level}); check(nx.level<=Math.max(0,pk.step)||nx.level===st.level-2||nx.level===0,'working step above where she wobbled (beyond the 2-step cap)',{lvl:nx.level,step:pk.step,from:st.level}); }
     if(out==='mild'&&nx.lastEvent==='wobble') check(nx.level===st.level,'single wobble changed level',{from:st.level,to:nx.level});
     // need
-    check(nx.need===L.need(nx.level),'need mismatch',{lvl:nx.level});
+    check(nx.need===(nx.winOn?L.WIN_GOOD:L.need(nx.level)),'need mismatch',{lvl:nx.level});
+    if(nx.winOn){ check(nx.win.n<=L.WIN_SIZE&&nx.win.good<=nx.win.n,'window out of range',nx.win); check(nx.run===nx.win.good,'run is not the good count',{run:nx.run,win:nx.win}); }
     // wait
     const w=L.waitUntil(list); check(w&&w.until>=e.createdAt,'wait before rep',{});
     if(out==='escalated') check(w.until-e.createdAt>=3*3600000,'no 3h pause after upset',{});
@@ -41,5 +43,6 @@ for(let run=0;run<600;run++){
   const perDay={}; let lvlPrev=start; const lv=L.levelsAfter(list,start);
   list.forEach((e,i)=>{ const p=i?lv[i-1]:start; if(lv[i]>p) perDay[e.date]=(perDay[e.date]||0)+1; });
   Object.keys(perDay).forEach(d=>check(perDay[d]<=3,'more than 3 step-ups in a day',{d,n:perDay[d]}));
+}
 }
 if(fails.length){ console.log(fails.slice(0,8).join('\n')); process.exit(1); } console.log('fuzz tests ok (' + n + ' checks)');
