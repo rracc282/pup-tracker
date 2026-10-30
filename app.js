@@ -1,6 +1,6 @@
 // Churro tracker app. Uses logic.js (pure) and Supabase (sync + push queue).
 'use strict';
-const APP_VERSION = '68';
+const APP_VERSION = '69';
 const CFG = window.PT_CONFIG || {};
 const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -86,6 +86,11 @@ function cacheLoad(){
     const c = JSON.parse(lsGet('pt-cache') || 'null');
     if(c){ (c.reps || []).forEach(e => repMap.set(e.id, e)); days = c.days || {}; }
     outbox = JSON.parse(lsGet('pt-outbox') || '[]');
+    // Version 67 gave the cue counter an id the database refused. Move any such entry to the proper id so it can sync.
+    Array.from(repMap.values()).filter(e => e.kind === 'cues' && String(e.id).startsWith('cues-')).forEach(e => {
+      const nid = cueId(e.date); repMap.delete(e.id); repMap.set(nid, Object.assign({}, e, { id: nid }));
+      outbox.forEach(o => { if(o.row && o.row.id === e.id) o.row.id = nid; });
+    });
   }catch(e){}
   rebuild();
 }
@@ -344,9 +349,11 @@ function waitInfo(){
   return remaining > 0 ? { remaining, until: w.until, reason: w.reason, run: w.run, breakMin: w.breakMin } : null;
 }
 // Cues she sees without you leaving (coat, keys, bag, door). One counter per day, kept as one small entry.
-function cuesOn(date){ const e = repMap.get('cues-' + date); return e && !e.voided ? (e.count || 0) : 0; }
+// The database wants a real uuid as the id, so each day's counter gets a fixed one built from the date.
+function cueId(date){ return '00000000-0000-4000-8000-0000' + String(date).replace(/-/g, ''); }
+function cuesOn(date){ const e = repMap.get(cueId(date)); return e && !e.voided ? (e.count || 0) : 0; }
 function cuesAdd(delta){
-  const date = todayStr(), id = 'cues-' + date, ex = repMap.get(id);
+  const date = todayStr(), id = cueId(date), ex = repMap.get(id);
   const count = Math.max(0, (ex ? ex.count || 0 : 0) + delta);
   putEntry(Object.assign({ place: 'home' }, ex || { id, kind: 'cues', date, createdAt: Date.now() }, { count }));
 }
