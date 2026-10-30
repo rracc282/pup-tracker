@@ -1,6 +1,6 @@
 // Churro tracker app. Uses logic.js (pure) and Supabase (sync + push queue).
 'use strict';
-const APP_VERSION = '67';
+const APP_VERSION = '68';
 const CFG = window.PT_CONFIG || {};
 const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -31,7 +31,7 @@ function stateNow(list, pl){ return stateFrom(list, pl, todayStr()); }
 const OUT_NAME = { calm:'Calm', alert:'Alert', mild:'Wobble', escalated:'Upset' };
 const POCKET_TAGS = ['Coffee','Shower','Bins','Cooking','Call','Evening','Other'];
 const TAG_GROUPS = [
-  ['Before I left', ['Awake before','Asleep before','@walked','Chew given']],
+  ['Before I left', ['Awake before','Restless before','Asleep before','@walked','Chew given']],
   ['Her first reaction', ['Head up','Stood up','Followed me','Went to the door']],
   ['How quickly she settled', ['Settled under 10 s','Settled under 1 min','Took over 1 min','Never settled']],
   ['Body signs', ['Panting','Pacing','Trembling','Lip licking','Yawning']],
@@ -40,8 +40,8 @@ const TAG_GROUPS = [
   ['When I came back', ['Calm greeting','Excited','Clingy','Ignored me']],
   ['Context', ['Outside noise','Visitor']]
 ];
-const PRE_STATES = [['Awake before','Awake'],['Asleep before','Asleep']];
-const TAG_LABEL = { 'Dozing before':'Dozing', 'Asleep before':'Asleep', 'Awake before':'Awake', 'Settled under 10 s':'Under 10 s', 'Settled under 1 min':'Under 1 min', 'Took over 1 min':'Over 1 min', '@walked':'Walked first' };
+const PRE_STATES = [['Awake before','Awake'],['Restless before','Restless'],['Asleep before','Asleep']];
+const TAG_LABEL = { 'Dozing before':'Dozing', 'Asleep before':'Asleep', 'Awake before':'Awake', 'Restless before':'Restless', 'Settled under 10 s':'Under 10 s', 'Settled under 1 min':'Under 1 min', 'Took over 1 min':'Over 1 min', '@walked':'Walked first' };
 const REACTION_TAGS_OLD = ['Asleep before','Awake before','Head up','Stood up','Followed me','Went to the door','Vocalised','Settled under 10 s','Settled under 1 min','Took over 1 min','Outside noise'];
 const SPOTS = ['Sofa','Bed','Crate','Floor'];
 const DAY_TYPES = [['home','Home','Most of the day at home. Room for up to 10 longer reps.'],['sitter','Sitter','Sitter has her. Up to 5 longer reps, plenty of short ones.'],['weekend','Weekend','We may be out a lot. Up to 8 longer reps. Gentle.'],['rest','Rest day','No training today. She just relaxes. Days off help both of you.']];
@@ -494,8 +494,8 @@ function feedbackHtml(){
     <div class="fb-form">
       <textarea class="note" id="fbNote" placeholder="Note: what did she do? Tap the mic on your keyboard to dictate." maxlength="800">${esc(f.note||'')}</textarea>`;
   if(f.kind === 'dep' && !f.medicated){
-    h = h.replace('<div class="fb-form">', `<div class="fb-form"><div class="hint" style="margin:10px 0 6px">Was she awake or asleep when you left?</div>
-      <div class="chips" style="margin-bottom:10px" role="group" aria-label="Awake or asleep">${PRE_STATES.map(([t, l]) => `<button class="chip" data-pre="${t}" aria-pressed="${f.tags.includes(t)}">${l}</button>`).join('')}</div>`);
+    h = h.replace('<div class="fb-form">', `<div class="fb-form"><div class="hint" style="margin:10px 0 6px">Was she awake, restless or asleep when you left?</div>
+      <div class="chips three" style="margin-bottom:10px" role="group" aria-label="Awake, restless or asleep">${PRE_STATES.map(([t, l]) => `<button class="chip" data-pre="${t}" aria-pressed="${f.tags.includes(t)}">${l}</button>`).join('')}</div>`);
   }
   if(f.open){
     h += `<div class="chips" role="group" aria-label="What were you doing">
