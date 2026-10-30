@@ -1,6 +1,6 @@
 // Churro tracker app. Uses logic.js (pure) and Supabase (sync + push queue).
 'use strict';
-const APP_VERSION = '77';
+const APP_VERSION = '78';
 const CFG = window.PT_CONFIG || {};
 const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -289,9 +289,10 @@ function openSteps(){
   const st = stateNow(ladderEntries(), place);
   let html = '<h2>All steps</h2>', last = '';
   for(let i = 0; i <= TOP; i++){
+    if(i > FIRST_OUT && !isCoarse(i) && i !== st.level) continue;   // in between, the time moves in small steps of about 8%
     const g = stepTag(i);
     if(g !== last){ html += `<div class="stephead">${esc(g)}</div>`; last = g; }
-    html += `<div class="steprow${i === st.level ? ' now' : ''}"><span class="n">${i + 1}</span><span>${esc(stepLabel(i))}${i === st.level ? ' (now)' : ''}</span></div>`;
+    html += `<div class="steprow${i === st.level ? ' now' : ''}"><span class="n">${i < FIRST_OUT ? i + 1 : '·'}</span><span>${esc(stepLabel(i))}${i === st.level ? ' (now)' : ''}</span></div>`;
   }
   html += '<button class="btn" data-action="closesheet">Close</button>';
   $('stepsBody').innerHTML = html;
@@ -387,7 +388,7 @@ function renderPos(){
   renderProgressBox();
   const st = stateNow(ladderEntries(), place);
   $('posNow').textContent = stepLabel(st.level);
-  $('posStep').textContent = 'Step ' + (st.level+1) + ' of ' + (TOP+1) + ' · ' + (st.winOn ? st.win.good + ' of ' + WIN_GOOD + ' calm and awake · ' + st.win.n + ' of ' + WIN_SIZE : st.run + ' of ' + st.need + ' calm') + (st.gate ? ' · ' + st.runDays + ' of 2 days' : '') + ' · goal 4 h';
+  $('posStep').textContent = (st.level < FIRST_OUT ? 'Step ' + (st.level+1) + ' of 13 · ' : '') + (st.winOn ? Math.min(st.win.good, WIN_GOOD) + ' of ' + WIN_GOOD + ' calm and awake · ' + st.win.n + ' of ' + WIN_SIZE : st.run + ' of ' + st.need + ' calm') + (st.gate ? ' · ' + st.runDays + ' of 2 days' : '') + ' · goal 4 h';
   const pct = v => (v / TOP * 100) + '%';
   const info = barInfo(ladderEntries(), place);
   let clip = `<div id="posFill" style="width:${pct(st.level)}"></div>`;
@@ -400,7 +401,7 @@ function renderPos(){
   let nextM = null;
   for(let k = st.level + 1; k <= TOP; k++){ if(MILESTONES[k]){ nextM = k; break; } }
   $('posNext').textContent = nextM != null
-    ? 'Next milestone: ' + fmtSec(DUR[nextM]) + ' · ' + (nextM - st.level) + ' step' + (nextM - st.level === 1 ? '' : 's') + ' away'
+    ? 'Next milestone: ' + fmtSec(DUR[nextM]) + ' (' + MILESTONES[nextM] + ')'
     : 'You are at the top of the ladder.';
   const legend = [];
   if(info.skipped.length) legend.push('Orange: steps you set by hand, not earned by reps.');
@@ -607,7 +608,8 @@ function renderRep(){
     const st = stateNow(live, place);
     const nx = pickNext(st, effPocket(st), place + '|' + depsFor(live, place).length + '|' + st.level, { warm: warmupPlan(depsFor(live, place), st, Date.now()) });
     let sub;
-    if(nx.kind === 'warmup') sub = (nx.warmOf > 1 ? 'Warm-up ' + nx.warmNo + ' of ' + nx.warmOf + '. ' : 'Warm-up. ') + 'It does not count toward moving up, and your step has not changed.';
+    if(nx.light) sub = 'A light, easy one to end on a good note. Then stop for today.';
+    else if(nx.kind === 'warmup') sub = (nx.warmOf > 1 ? 'Warm-up ' + nx.warmNo + ' of ' + nx.warmOf + '. ' : 'Warm-up. ') + 'It does not count toward moving up, and your step has not changed.';
     else if(nx.fitted) sub = 'A shorter rep that fits your time.';
     else if(nx.afterWobble) sub = 'Easier on purpose after the wobble.';
     else if(nx.afterAlert2) sub = 'Easier on purpose after the second alert.';
