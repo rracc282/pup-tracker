@@ -438,3 +438,20 @@ console.log('logic tests (first day back, cues) ok');
   const noC=L.buildSummary([dep],{},'2026-11-05','home'); assert(!/Cues without leaving/.test(noC));
   const withC=L.buildSummary([dep,{id:'cues-2026-11-05',kind:'cues',date:'2026-11-05',createdAt:6000,count:4}],{},'2026-11-05','home');
   assert(/Cues without leaving today[^\n]*: 4\./.test(withC),'cue line'); console.log('logic tests (cues) ok'); }
+// restless start: a wobble or alert tagged "Restless before" does not count against her (from 30 Oct 2026)
+{ let n=0,T=Date.UTC(2026,10,3,8); const R=(step,outcome,tags)=>mk({id:'rs'+(n++),date:'2026-11-03',step,level:step,outcome,tags:tags||[],createdAt:(T+=900000)});
+  const s0=L.FIRST_OUT+2;
+  // wobble, then another wobble: normally drops a step
+  let st=L.stateFrom([R(s0,'mild'),R(s0,'mild')],'home'); assert(st.level<s0,'two plain wobbles drop');
+  // same, but both restless: no drop, no reset, state is restless
+  st=L.stateFrom([R(s0,'mild',['Restless before']),R(s0,'mild',['Restless before'])],'home');
+  assert.strictEqual(st.lastEvent,'restless'); assert.strictEqual(st.restlessRun,2); assert(st.level>=0);
+  assert.strictEqual(st.level,s0,'no movement');
+  // coach message asks to stop after two
+  assert(/Stop for now/.test(L.coachMsg('restless',st)[0]));
+  assert(!/Stop for now/.test(L.coachMsg('restless',{restlessRun:1})[0]));
+  // old dates are untouched
+  const old=mk({id:'o1',date:'2026-10-29',step:s0,level:s0,outcome:'mild',tags:['Restless before'],createdAt:5}); assert.strictEqual(L.restlessSkip(old),false);
+  // an upset on a restless start still counts
+  assert.strictEqual(L.restlessSkip(R(s0,'escalated',['Restless before'])),false);
+  console.log('logic tests (restless start) ok'); }

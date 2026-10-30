@@ -1,6 +1,6 @@
 // Churro tracker app. Uses logic.js (pure) and Supabase (sync + push queue).
 'use strict';
-const APP_VERSION = '72';
+const APP_VERSION = '73';
 const CFG = window.PT_CONFIG || {};
 const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -1118,7 +1118,13 @@ document.addEventListener('click', ev => {
   if(t.dataset.pocket){ if(ui.mode === 'idle'){ pocket = parseInt(t.dataset.pocket, 10); lsSet('pt-pocket', String(pocket)); render({ rep:true }); } return; }
   if(t.dataset.out){ saveRep(t.dataset.out); return; }
   if(t.dataset.tag){ if(ui.feedback){ const f = ui.feedback; f.note = ($('fbNote') && $('fbNote').value) || f.note; const k = t.dataset.tag; f.pocket = f.pocket.includes(k) ? f.pocket.filter(x => x !== k) : f.pocket.concat(k); flushNote(); renderRep(); } return; }
-  if(t.dataset.pre){ if(ui.feedback){ const f = ui.feedback; f.note = ($('fbNote') && $('fbNote').value) || f.note; const k = t.dataset.pre; const had = f.tags.includes(k); f.tags = f.tags.filter(x => !PRE_STATES.some(p => p[0] === x)); if(!had) f.tags.push(k); flushNote(); renderRep(); } return; }
+  if(t.dataset.pre){ if(ui.feedback){ const f = ui.feedback; f.note = ($('fbNote') && $('fbNote').value) || f.note; const k = t.dataset.pre; const had = f.tags.includes(k); f.tags = f.tags.filter(x => !PRE_STATES.some(p => p[0] === x)); if(!had) f.tags.push(k);
+    flushNote().then(() => {
+      // The tag can change how the rep counts (a restless start), so refresh the advice for the rep she just logged.
+      const e = repMap.get(f.id);
+      if(e && e.kind === 'dep' && !e.medicated){ const after = stateNow(ladderEntries(), e.place); const last = depsFor(ladderEntries(), e.place).slice(-1)[0]; if(last && last.id === e.id) f.msg = coachMsg(after.lastEvent, after); }
+      renderRep(); renderToday();
+    }); } return; }
   if(t.dataset.tgroup){ ui.tgOpen = ui.tgOpen || {}; const g = t.dataset.tgroup; ui.tgOpen[g] = !ui.tgOpen[g]; if(ui.feedback){ ui.feedback.note = ($('fbNote') && $('fbNote').value) || ui.feedback.note; } renderRep(); return; }
   if(t.dataset.rtag){ if(ui.feedback){ const f = ui.feedback; f.note = ($('fbNote') && $('fbNote').value) || f.note; const k = t.dataset.rtag; f.tags = f.tags.includes(k) ? f.tags.filter(x => x !== k) : f.tags.concat(k); flushNote(); renderRep(); } return; }
   if(t.dataset.setout){ const e = repMap.get(t.dataset.id); if(e){ putEntry(Object.assign({}, e, { outcome: t.dataset.setout })); render({ rep:true }); } return; }
