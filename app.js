@@ -1,6 +1,6 @@
 // Churro tracker app. Uses logic.js (pure) and Supabase (sync + push queue).
 'use strict';
-const APP_VERSION = '73';
+const APP_VERSION = '74';
 const CFG = window.PT_CONFIG || {};
 const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -802,11 +802,19 @@ function progressHtml(){
   const bars = cueMax ? cueN.map((c, k) => c ? `<rect x="${(xOf(k) - Math.min(9, step * 0.38)).toFixed(1)}" y="${(floor + 12 - (Math.min(c, CUE_FULL) / CUE_FULL) * (floor + 12 - top)).toFixed(1)}" width="${Math.min(18, step * 0.76).toFixed(1)}" height="${((Math.min(c, CUE_FULL) / CUE_FULL) * (floor + 12 - top)).toFixed(1)}" rx="3" fill="var(--ink-2)" opacity=".22"/>` : '').join('') : '';
   // Green band behind the selected day.
   const bands = `<rect x="${(sel * step).toFixed(1)}" y="0" width="${step.toFixed(1)}" height="${H}" fill="var(--calm-bg)"/>`;
-  // One line through the longest calm rep of each day. A red piece of line means she stepped back: she dropped during the day, or started the next day easier.
-  let segs = '';
+  // One line through the longest calm rep of each day. When she had to step back, the line dips to the step she restarted on that day (a small hollow dot) and climbs back to her best calm rep, so the setback and the recovery both show.
+  let segs = '', starts = '';
   for(let k = 1; k < n; k++){
     const back = s[k - 1].dropped || s[k].easier;
-    segs += `<line x1="${xOf(k - 1).toFixed(1)}" y1="${yOf(bestOf(s[k - 1])).toFixed(1)}" x2="${xOf(k).toFixed(1)}" y2="${yOf(bestOf(s[k])).toFixed(1)}" stroke="${back ? 'var(--upset)' : 'var(--calm)'}" stroke-width="2.5" stroke-linecap="round"/>`;
+    const prevBest = bestOf(s[k - 1]), best = bestOf(s[k]), st = secOf(s[k].start);
+    const ln = (x1, y1, x2, y2, c) => `<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" stroke="${c}" stroke-width="2.5" stroke-linecap="round"/>`;
+    if(back && st < prevBest){
+      const sx = xOf(k) - Math.min(step * 0.32, 12);
+      segs += ln(xOf(k - 1), yOf(prevBest), sx, yOf(st), 'var(--upset)') + ln(sx, yOf(st), xOf(k), yOf(best), 'var(--calm)');
+      starts += `<circle cx="${sx.toFixed(1)}" cy="${yOf(st).toFixed(1)}" r="${n > 24 ? 2.2 : 3}" fill="var(--surface)" stroke="var(--upset)" stroke-width="1.8"/>`;
+    } else {
+      segs += ln(xOf(k - 1), yOf(prevBest), xOf(k), yOf(best), back ? 'var(--upset)' : 'var(--calm)');
+    }
   }
   // Last day dropped and nothing after it yet: a short red tail down to the step she was moved to.
   const lp = s[n - 1];
@@ -821,7 +829,7 @@ function progressHtml(){
   const tags = (selP.dropped ? `<span class="tg drop">Stepped back from ${esc(short(selP.dropFrom))} to ${esc(short(selP.dropTo))}</span>` : '')
     + (selP.easier ? `<span class="tg drop">Started easier${selP.easier === 'break' ? ' after a break' : ' after a step back'}</span>` : '');
   const cap1 = `<b>${esc(fmtDay(selP.date).replace(/\/\d{4}$/, ''))}</b> · ${esc(short(selP.start))}${selP.end !== selP.start ? ' → ' + esc(short(selP.end)) : ''} · best calm ${selP.maxCalm == null ? 'none' : nm(selP.maxCalm)} · ${selP.calm} calm${selP.alert ? ', ' + selP.alert + ' alert' : ''}${selP.mild ? ', ' + selP.mild + ' wobble' + (selP.mild === 1 ? '' : 's') : ''}${selP.esc ? ', ' + selP.esc + ' upset' + (selP.esc === 1 ? '' : 's') : ''}${cueMax ? ' · ' + cueN[sel] + ' cue' + (cueN[sel] === 1 ? '' : 's') : ''}${tags ? '<div class="tgs">' + tags + '</div>' : ''}`;
-  return `<div class="pgwrap" role="img" aria-label="${esc(desc)}"><svg class="pgaxis" viewBox="0 0 50 ${H}" width="50" height="${H}">${axis}</svg><div class="pgscroll"><svg viewBox="0 0 ${W.toFixed(1)} ${H}" width="${W.toFixed(1)}" height="${H}">${bands}${bars}${grid}${xa}${segs}${dots}${tri}${hits}</svg></div></div>
+  return `<div class="pgwrap" role="img" aria-label="${esc(desc)}"><svg class="pgaxis" viewBox="0 0 50 ${H}" width="50" height="${H}">${axis}</svg><div class="pgscroll"><svg viewBox="0 0 ${W.toFixed(1)} ${H}" width="${W.toFixed(1)}" height="${H}">${bands}${bars}${grid}${xa}${segs}${dots}${starts}${tri}${hits}</svg></div></div>
     <div class="progcap" aria-live="polite">${cap1}</div>
     <div class="legend"><span><i class="lg-dot"></i>Longest calm rep</span><span><i class="lg-line"></i>Stepped back</span>${cueMax ? '<span><i class="lg-bar"></i>Cues</span>' : ''}</div>
 `;
