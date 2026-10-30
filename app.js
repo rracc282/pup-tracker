@@ -1,6 +1,6 @@
 // Churro tracker app. Uses logic.js (pure) and Supabase (sync + push queue).
 'use strict';
-const APP_VERSION = '69';
+const APP_VERSION = '70';
 const CFG = window.PT_CONFIG || {};
 const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -775,8 +775,8 @@ function progressHtml(){
   const reached = Math.max.apply(null, s.map(p => Math.max(bestOf(p), secOf(p.high))));
   const cap = (allTicks.find(t => t[0] >= reached * 1.25 && t[0] >= 60) || allTicks[allTicks.length - 1])[0];
   const ticks = allTicks.filter(t => t[0] <= cap && (t[0] === 0 || t[0] >= 2) && (cap > 300 ? ![5, 20, 30, 120].includes(t[0]) : cap > 120 ? t[0] !== 20 : true));
-  // One column per training day. The column width is chosen so a whole number of days fits, so no date is ever cut off.
-  const vis = ui.pgW || 250, n = s.length, k0 = Math.max(4, Math.round(vis / 44)), COL = vis / k0, W = Math.max(n * COL, vis), step = W / n;
+  // The whole progression fits: one column per training day, squeezed to the width of the card. Tap anywhere to pick the nearest day.
+  const vis = ui.pgW || 250, n = s.length, W = vis, step = W / n, COL = step;
   const T = 12, H = 200, floor = H - 34, top = T;
   const MIN = 2, MAX = cap;
   const yOf = sec => sec < MIN ? floor : (floor - 16) - ((floor - 16) - top) * (Math.log(sec / MIN) / Math.log(MAX / MIN));
@@ -789,10 +789,16 @@ function progressHtml(){
     axis += `<text x="46" y="${(+y + 3).toFixed(1)}" text-anchor="end" font-size="9" fill="var(--ink-2)">${lab}</text>`;
   });
   let xa = `<line x1="0" x2="${W}" y1="${floor + 12}" y2="${floor + 12}" stroke="var(--ink-2)" stroke-width="1"/>`;
-  s.forEach((p, k) => { xa += `<text x="${xOf(k).toFixed(1)}" y="${floor + 28}" text-anchor="middle" font-size="9.5" fill="${k === sel ? 'var(--ink)' : 'var(--ink-2)'}"${k === sel ? ' font-weight="700"' : ''}>${p.date.slice(8)}/${p.date.slice(5, 7)}</text>`; });
+  // Dates: every day when they fit, otherwise every few days. The picked day and the latest day always show.
+  const every = Math.max(1, Math.ceil(32 / step));
+  const lx = k => Math.min(Math.max(xOf(k), 14), W - 14);
+  s.forEach((p, k) => {
+    const show = k === sel || ((n - 1 - k) % every === 0 && Math.abs(lx(k) - lx(sel)) >= 32);
+    if(show) xa += `<text x="${lx(k).toFixed(1)}" y="${floor + 28}" text-anchor="middle" font-size="9.5" fill="${k === sel ? 'var(--ink)' : 'var(--ink-2)'}"${k === sel ? ' font-weight="700"' : ''}>${p.date.slice(8)}/${p.date.slice(5, 7)}</text>`;
+  });
   // Faint bars behind the line: cues she saw without a departure that day.
   const cueN = s.map(p => cuesOn(p.date)), cueMax = Math.max.apply(null, cueN.concat([0]));
-  const bars = cueMax ? cueN.map((c, k) => c ? `<rect x="${(xOf(k) - 9).toFixed(1)}" y="${(floor + 12 - (c / cueMax) * (floor - top) * 0.55).toFixed(1)}" width="18" height="${((c / cueMax) * (floor - top) * 0.55).toFixed(1)}" rx="3" fill="var(--ink-2)" opacity=".22"/>` : '').join('') : '';
+  const bars = cueMax ? cueN.map((c, k) => c ? `<rect x="${(xOf(k) - Math.min(9, step * 0.38)).toFixed(1)}" y="${(floor + 12 - (c / cueMax) * (floor - top) * 0.55).toFixed(1)}" width="${Math.min(18, step * 0.76).toFixed(1)}" height="${((c / cueMax) * (floor - top) * 0.55).toFixed(1)}" rx="3" fill="var(--ink-2)" opacity=".22"/>` : '').join('') : '';
   // Green band behind the selected day.
   const bands = `<rect x="${(sel * step).toFixed(1)}" y="0" width="${step.toFixed(1)}" height="${H}" fill="var(--calm-bg)"/>`;
   // One line through the longest calm rep of each day. A red piece of line means she stepped back: she dropped during the day, or started the next day easier.
@@ -804,7 +810,7 @@ function progressHtml(){
   // Last day dropped and nothing after it yet: a short red tail down to the step she was moved to.
   const lp = s[n - 1];
   if(lp.dropped) segs += `<line x1="${xOf(n - 1).toFixed(1)}" y1="${yOf(bestOf(lp)).toFixed(1)}" x2="${(xOf(n - 1) + step * 0.35).toFixed(1)}" y2="${yOf(secOf(lp.dropTo)).toFixed(1)}" stroke="var(--upset)" stroke-width="2.5" stroke-linecap="round"/>`;
-  const dots = s.map((p, k) => `<circle cx="${xOf(k).toFixed(1)}" cy="${yOf(bestOf(p)).toFixed(1)}" r="${k === sel ? 5 : 3.5}" fill="${p.maxCalm == null ? 'var(--surface)' : 'var(--calm)'}" stroke="var(--calm)" stroke-width="${p.maxCalm == null ? 2 : 0}"/>`).join('');
+  const dots = s.map((p, k) => `<circle cx="${xOf(k).toFixed(1)}" cy="${yOf(bestOf(p)).toFixed(1)}" r="${k === sel ? (n > 24 ? 4 : 5) : (n > 24 ? 2.5 : 3.5)}" fill="${p.maxCalm == null ? 'var(--surface)' : 'var(--calm)'}" stroke="var(--calm)" stroke-width="${p.maxCalm == null ? 2 : 0}"/>`).join('');
   const tri = '';
   const hits = s.map((p, k) => `<rect x="${(k * step).toFixed(1)}" y="0" width="${step.toFixed(1)}" height="${H}" fill="transparent" data-progday="${p.date}" style="cursor:pointer"/>`).join('');
   const last = s[n - 1];
