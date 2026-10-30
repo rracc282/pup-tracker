@@ -1,6 +1,6 @@
 // Churro tracker app. Uses logic.js (pure) and Supabase (sync + push queue).
 'use strict';
-const APP_VERSION = '66';
+const APP_VERSION = '67';
 const CFG = window.PT_CONFIG || {};
 const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -342,6 +342,19 @@ function waitInfo(){
   if(!w) return null;
   const remaining = w.until - Date.now();
   return remaining > 0 ? { remaining, until: w.until, reason: w.reason, run: w.run, breakMin: w.breakMin } : null;
+}
+// Cues she sees without you leaving (coat, keys, bag, door). One counter per day, kept as one small entry.
+function cuesOn(date){ const e = repMap.get('cues-' + date); return e && !e.voided ? (e.count || 0) : 0; }
+function cuesAdd(delta){
+  const date = todayStr(), id = 'cues-' + date, ex = repMap.get(id);
+  const count = Math.max(0, (ex ? ex.count || 0 : 0) + delta);
+  putEntry(Object.assign({ place: 'home' }, ex || { id, kind: 'cues', date, createdAt: Date.now() }, { count }));
+}
+function renderCues(){
+  const el = $('cueRow'); if(!el) return;
+  const n = cuesOn(todayStr());
+  el.innerHTML = `<div class="cl">Cues without leaving<div class="cs">Coat, keys, bag, door</div></div>
+    <div class="cuectl"><button data-action="cuesub" aria-label="One less" ${n ? '' : 'disabled'}>−</button><span class="cn" aria-live="polite">${n}</span><button class="plus" data-action="cueadd">+1</button></div>`;
 }
 function ladderEntries(){ return liveEntries(); }  // depsFor() further drops medicated reps
 
@@ -698,7 +711,7 @@ function describeEntry(e){
   return 'Old method · ' + (e.phase ? 'Phase ' + e.phase : '') + (e.subVal ? ' · ' + e.subVal + ' min' : '') + ' · ' + (OUT_NAME[e.outcome] || 'Neutral day');
 }
 function renderLog(){
-  const sorted = entries.slice().reverse();
+  const sorted = entries.filter(e => e.kind !== 'cues').reverse();
   const shown = ui.showAll ? sorted : sorted.slice(0, 12);
   if(!sorted.length){ $('logList').innerHTML = '<div class="empty">No reps yet. Your first one will show here.</div>'; return; }
   let h = shown.map(e => {
@@ -770,6 +783,9 @@ function progressHtml(){
   });
   let xa = `<line x1="0" x2="${W}" y1="${floor + 12}" y2="${floor + 12}" stroke="var(--ink-2)" stroke-width="1"/>`;
   s.forEach((p, k) => { xa += `<text x="${xOf(k).toFixed(1)}" y="${floor + 28}" text-anchor="middle" font-size="9.5" fill="${k === sel ? 'var(--ink)' : 'var(--ink-2)'}"${k === sel ? ' font-weight="700"' : ''}>${p.date.slice(8)}/${p.date.slice(5, 7)}</text>`; });
+  // Faint bars behind the line: cues she saw without a departure that day.
+  const cueN = s.map(p => cuesOn(p.date)), cueMax = Math.max.apply(null, cueN.concat([0]));
+  const bars = cueMax ? cueN.map((c, k) => c ? `<rect x="${(xOf(k) - 9).toFixed(1)}" y="${(floor + 12 - (c / cueMax) * (floor - top) * 0.55).toFixed(1)}" width="18" height="${((c / cueMax) * (floor - top) * 0.55).toFixed(1)}" rx="3" fill="var(--ink-2)" opacity=".22"/>` : '').join('') : '';
   // Green band behind the selected day.
   const bands = `<rect x="${(sel * step).toFixed(1)}" y="0" width="${step.toFixed(1)}" height="${H}" fill="var(--calm-bg)"/>`;
   // One line through the longest calm rep of each day. A red piece of line means she stepped back: she dropped during the day, or started the next day easier.
@@ -790,10 +806,10 @@ function progressHtml(){
   const short = lv => stepLabel(lv).replace(/^Out for /, '');
   const tags = (selP.dropped ? `<span class="tg drop">Stepped back from ${esc(short(selP.dropFrom))} to ${esc(short(selP.dropTo))}</span>` : '')
     + (selP.easier ? `<span class="tg drop">Started easier${selP.easier === 'break' ? ' after a break' : ' after a step back'}</span>` : '');
-  const cap1 = `<b>${esc(fmtDay(selP.date).replace(/\/\d{4}$/, ''))}</b> · ${esc(short(selP.start))}${selP.end !== selP.start ? ' → ' + esc(short(selP.end)) : ''} · best calm ${selP.maxCalm == null ? 'none' : nm(selP.maxCalm)} · ${selP.calm} calm${selP.alert ? ', ' + selP.alert + ' alert' : ''}${selP.mild ? ', ' + selP.mild + ' wobble' + (selP.mild === 1 ? '' : 's') : ''}${selP.esc ? ', ' + selP.esc + ' upset' + (selP.esc === 1 ? '' : 's') : ''}${tags ? '<div class="tgs">' + tags + '</div>' : ''}`;
-  return `<div class="pgwrap" role="img" aria-label="${esc(desc)}"><svg class="pgaxis" viewBox="0 0 50 ${H}" width="50" height="${H}">${axis}</svg><div class="pgscroll"><svg viewBox="0 0 ${W.toFixed(1)} ${H}" width="${W.toFixed(1)}" height="${H}">${bands}${grid}${xa}${segs}${dots}${tri}${hits}</svg></div></div>
+  const cap1 = `<b>${esc(fmtDay(selP.date).replace(/\/\d{4}$/, ''))}</b> · ${esc(short(selP.start))}${selP.end !== selP.start ? ' → ' + esc(short(selP.end)) : ''} · best calm ${selP.maxCalm == null ? 'none' : nm(selP.maxCalm)} · ${selP.calm} calm${selP.alert ? ', ' + selP.alert + ' alert' : ''}${selP.mild ? ', ' + selP.mild + ' wobble' + (selP.mild === 1 ? '' : 's') : ''}${selP.esc ? ', ' + selP.esc + ' upset' + (selP.esc === 1 ? '' : 's') : ''}${cueMax ? ' · ' + cueN[sel] + ' cue' + (cueN[sel] === 1 ? '' : 's') : ''}${tags ? '<div class="tgs">' + tags + '</div>' : ''}`;
+  return `<div class="pgwrap" role="img" aria-label="${esc(desc)}"><svg class="pgaxis" viewBox="0 0 50 ${H}" width="50" height="${H}">${axis}</svg><div class="pgscroll"><svg viewBox="0 0 ${W.toFixed(1)} ${H}" width="${W.toFixed(1)}" height="${H}">${bands}${bars}${grid}${xa}${segs}${dots}${tri}${hits}</svg></div></div>
     <div class="progcap" aria-live="polite">${cap1}</div>
-    <div class="legend"><span><i class="lg-dot"></i>Longest calm rep</span><span><i class="lg-line"></i>Stepped back</span></div>
+    <div class="legend"><span><i class="lg-dot"></i>Longest calm rep</span><span><i class="lg-line"></i>Stepped back</span>${cueMax ? '<span><i class="lg-bar"></i>Cues</span>' : ''}</div>
 `;
 }
 function moreSec(id, title, body, forceOpen){
@@ -837,7 +853,7 @@ document.addEventListener('toggle', ev => { const d = ev.target; if(d && d.class
 function render(opts){
   if(!session) return;
   if(ui.mode === 'idle') place = dayPlace();
-  renderDay(); renderPlace(); renderPocket(); renderPos(); renderToday(); renderLog();
+  renderDay(); renderPlace(); renderPocket(); renderPos(); renderToday(); renderCues(); renderLog();
   if(!ui.alone || !document.activeElement || !$('moreList').contains(document.activeElement)) renderMore();
   if(ui.mode !== 'run' || (opts && opts.rep)){
     // do not wipe a note the user is typing
@@ -1101,6 +1117,8 @@ document.addEventListener('click', ev => {
     case 'useplan': { const r = ui.rep; if(r){ r.actualSec = DUR[r.step]; r.byPlan = true; saveActive(); render({ rep:true }); } break; }
     case 'early': finishRun(true); break;
     case 'cancel': case 'discard': cancelRep(); break;
+    case 'cueadd': cuesAdd(1); renderCues(); renderProgressBox(); break;
+    case 'cuesub': cuesAdd(-1); renderCues(); renderProgressBox(); break;
     case 'startrest': startRest(); break;
     case 'override': ui.override = true; renderRep(); break;
     case 'fbsame': if(ui.feedback){ const d = lastRepDetails(); if(d){ const f = ui.feedback; f.note = ($('fbNote') && $('fbNote').value) || f.note; f.tags = Array.from(new Set(f.tags.concat(d.tags))); f.pocket = d.pocket.slice(); f.walked = d.walked; f.partner = d.partner; flushNote(); renderRep(); } } break;

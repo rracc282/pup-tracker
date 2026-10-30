@@ -433,3 +433,8 @@ console.log('logic tests (first day back, cues) ok');
   // a day with no step-down is not dropped
   assert.strictEqual(ser.find(x=>x.date==='2026-11-02').dropped,false);
   console.log('logic tests (graph dropped) ok'); }
+// cue counter: summary mentions cues only when there are some
+{ const dep=mk({id:'c1',date:'2026-11-05',step:L.FIRST_OUT,level:L.FIRST_OUT,createdAt:5000,outcome:'calm',tags:[]});
+  const noC=L.buildSummary([dep],{},'2026-11-05','home'); assert(!/Cues without leaving/.test(noC));
+  const withC=L.buildSummary([dep,{id:'cues-2026-11-05',kind:'cues',date:'2026-11-05',createdAt:6000,count:4}],{},'2026-11-05','home');
+  assert(/Cues without leaving today[^\n]*: 4\./.test(withC),'cue line'); console.log('logic tests (cues) ok'); }

@@ -1,4 +1,4 @@
-const LOGIC_VERSION = '66';
+const LOGIC_VERSION = '67';
 // Pure training logic. No DOM, no network. Loaded by index.html and tested in node.
 // One ladder. Steps 0-5: a cue while she watches. 6-12: cues while she is behind the closed door. 13 and up: seconds spent outside.
 // Time outside per step. Every step has a stable id ('out.<seconds>'), so inserting steps never changes saved history.
@@ -495,6 +495,9 @@ function buildSummary(entries, days, date, place){
     L.push('- ' + (PLACE_LABEL[p] || p) + (p === place ? ' (today)' : '') + ': ' + stepLabel(sp.level) + ' (step ' + (sp.level + 1) + ' of ' + (TOP + 1) + '), ' + sp.run + ' of ' + sp.need + ' calm in a row' + (sp.level === GATE ? ', on ' + sp.runDays + ' of ' + GATE_DAYS + ' days needed' : '') + '.');
   });
   L.push('Today: ' + dayDeps.length + ' reps (' + c + ' calm, ' + al + ' alert, ' + w + ' wobble, ' + u + ' upset), ' + rests.length + ' rest blocks' + (rests.length ? ' (' + rests.map(r => (r.minutes != null ? r.minutes : '?') + ' min ' + (OUT_LABEL[r.outcome] || '')).join(', ') + ')' : '') + ', alone time: ' + (alone.length ? alone.map(a => a.minutes + ' min ' + (OUT_LABEL[a.outcome] || '') + (a.trazodone ? ' (trazodone given)' : '')).join(', ') : 'none') + '.');
+  const cuesOf = d => { const c = live.find(e => e.kind === 'cues' && e.date === d); return c ? (c.count || 0) : 0; };
+  const anyCues = live.some(e => e.kind === 'cues' && (e.count || 0) > 0);
+  if(anyCues) L.push('Cues without leaving today (coat, keys, bag, door, no departure): ' + cuesOf(date) + '.');
   L.push('');
   L.push('Reps:');
   dayDeps.forEach((e, i) => {
@@ -531,7 +534,7 @@ function buildSummary(entries, days, date, place){
         let idx = -1; al.forEach((e, i) => { if(e.date <= d) idx = i; });
         if(al.some(e => e.date === d)) steps.push((PLACE_LABEL[p] || p) + ': ' + (idx >= 0 ? stepLabel(lvs[idx]) : '-'));
       });
-      L.push(fmtDay(d) + ' · ' + ((days[d] && DAY_NAME[days[d].day_type]) || 'type not set') + ' · ' + dd.length + ' reps ' + cc + '/' + aa + '/' + ww + '/' + uu + ' · ' + (steps.join('; ') || '-'));
+      L.push(fmtDay(d) + ' · ' + ((days[d] && DAY_NAME[days[d].day_type]) || 'type not set') + ' · ' + dd.length + ' reps ' + cc + '/' + aa + '/' + ww + '/' + uu + ' · ' + (steps.join('; ') || '-') + (anyCues ? ' · cues ' + cuesOf(d) : ''));
     });
   }
   // Step history: every step touched in each place, with the days she did it and when she moved on
