@@ -1,6 +1,6 @@
 // Churro tracker app. Uses logic.js (pure) and Supabase (sync + push queue).
 'use strict';
-const APP_VERSION = '65';
+const APP_VERSION = '66';
 const CFG = window.PT_CONFIG || {};
 const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -750,14 +750,14 @@ function progressHtml(){
   if(!s || s.length < 2) return s ? '<div class="hint">The graph starts on the first day of the front door step and needs a second day to draw a line.</div>' : '';
   const secOf = lv => (lv >= FIRST_OUT ? DUR[lv] : 0);
   // The scale grows with her progress, so early on the graph stays small and the first steps get room.
-  const allTicks = [[0, 'Door only'], [2, '2 s'], [5, '5 s'], [10, '10 s'], [30, '30 s'], [60, '1 min'], [300, '5 min'], [900, '15 min'], [3600, '1 h'], [7200, '2 h'], [14400, '4 h goal']];
+  const allTicks = [[0, 'Door only'], [2, '2 s'], [5, '5 s'], [10, '10 s'], [20, '20 s'], [30, '30 s'], [60, '1 min'], [120, '2 min'], [300, '5 min'], [900, '15 min'], [3600, '1 h'], [7200, '2 h'], [14400, '4 h goal']];
   const bestOf = p => (p.maxCalm != null ? p.maxCalm : secOf(p.start));
   const reached = Math.max.apply(null, s.map(p => Math.max(bestOf(p), secOf(p.high))));
-  const cap = (allTicks.find(t => t[0] >= reached * 1.8 && t[0] >= 60) || allTicks[allTicks.length - 1])[0];
-  const ticks = allTicks.filter(t => t[0] <= cap && (t[0] === 0 || t[0] >= 2) && (cap > 300 ? ![5, 30].includes(t[0]) : true));
+  const cap = (allTicks.find(t => t[0] >= reached * 1.25 && t[0] >= 60) || allTicks[allTicks.length - 1])[0];
+  const ticks = allTicks.filter(t => t[0] <= cap && (t[0] === 0 || t[0] >= 2) && (cap > 300 ? ![5, 20, 30, 120].includes(t[0]) : cap > 120 ? t[0] !== 20 : true));
   // One column per training day. The column width is chosen so a whole number of days fits, so no date is ever cut off.
   const vis = ui.pgW || 250, n = s.length, k0 = Math.max(4, Math.round(vis / 44)), COL = vis / k0, W = Math.max(n * COL, vis), step = W / n;
-  const T = 12, H = 150, floor = H - 34, top = T;
+  const T = 12, H = 200, floor = H - 34, top = T;
   const MIN = 2, MAX = cap;
   const yOf = sec => sec < MIN ? floor : (floor - 16) - ((floor - 16) - top) * (Math.log(sec / MIN) / Math.log(MAX / MIN));
   const xOf = k => step * (k + 0.5);
