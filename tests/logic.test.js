@@ -347,9 +347,16 @@ console.log('logic tests (graph series) ok');
   assert.strictEqual(st.lastEvent,'alert'); assert.strictEqual(st.run,2); assert.strictEqual(st.level,s);
   const pk=L.pickNext(st,60,'x1'); assert.strictEqual(pk.kind,'hard'); assert.strictEqual(pk.step,s);
   st=L.computeState(base.concat([mk(s,s,'alert',T+2e6),mk(s,s,'calm',T+3e6)]),0); assert.strictEqual(st.level,s+1); // the alert did not reset the run
+  // second alert in a row: count stays, next rep is easier
   st=L.computeState(base.concat([mk(s,s,'alert',T+2e6),mk(s,s,'alert',T+3e6)]),0);
+  assert.strictEqual(st.lastEvent,'alert2'); assert.strictEqual(st.run,2); assert.strictEqual(st.level,s); assert.strictEqual(st.alertConv,false);
+  assert.strictEqual(L.pickNext(st,60,'x2').kind,'easy');
+  // third alert in a row: counts as a wobble
+  st=L.computeState(base.concat([mk(s,s,'alert',T+2e6),mk(s,s,'alert',T+3e6),mk(s,s,'alert',T+4e6)]),0);
   assert.strictEqual(st.alertConv,true); assert.strictEqual(st.run,0); assert.strictEqual(st.lastEvent,'wobble');
-  assert.strictEqual(L.coachMsg('wobble',st)[0],'Second alert in a row.');
+  assert.strictEqual(L.coachMsg('wobble',st)[0],'Third alert in a row.');
+  // dates before 30 Oct 2026 keep the old rule (second alert = wobble)
+  { const o=(oc,ts)=>mk(s,s,oc,ts,'2026-10-20'); const so=L.computeState([o('calm',T),o('alert',T+1e6),o('alert',T+2e6)],0); assert.strictEqual(so.alertConv,true); }
   // a calm rep between two alerts keeps them apart
   st=L.computeState([mk(s,s,'alert',T),mk(s,s,'calm',T+1e6),mk(s,s,'alert',T+2e6)],0); assert.strictEqual(st.lastEvent,'alert'); assert.strictEqual(st.alertConv,false);
   // alerts are not upsets in the summary or the help triggers

@@ -1,4 +1,4 @@
-const LOGIC_VERSION = '74';
+const LOGIC_VERSION = '75';
 // Pure training logic. No DOM, no network. Loaded by index.html and tested in node.
 // One ladder. Steps 0-5: a cue while she watches. 6-12: cues while she is behind the closed door. 13 and up: seconds spent outside.
 // Time outside per step. Every step has a stable id ('out.<seconds>'), so inserting steps never changes saved history.
@@ -59,6 +59,8 @@ function capFor(level){ return level <= 11 ? 3 : level > GATE && DUR[level] <= 1
 const CAP3_FROM = '2026-10-24';
 // From this day: a wobble or alert on a rep tagged "Restless before" says more about the start than about the step. It is kept in the log but does not count against her.
 const RESTLESS_FROM = '2026-10-30';
+// From this day: one alert repeats the step, a second alert in a row makes the next rep easier (the count stays), a third in a row counts as a wobble.
+const ALERT2_FROM = '2026-10-30';
 function restlessSkip(e){ return !!e && e.date >= RESTLESS_FROM && (e.tags || []).includes('Restless before') && (e.outcome === 'mild' || e.outcome === 'alert'); }
 function capV2a(level){ return level <= 5 ? 3 : level <= 11 ? 2 : level > GATE && DUR[level] <= 10 ? 2 : DUR[level] <= 60 ? 1 : DUR[level] <= 240 ? 2 : 1; }
 // The stricter rules above apply from this day on. Reps logged before it are replayed under the rules she trained with,
@@ -111,12 +113,12 @@ function computeState(depList, startLevel, asOf){
     const rsk = restlessSkip(e);
     if(rsk){ restlessRun++; } else { restlessRun = 0; }
     if(rsk){ /* restless start: no change to the counts */ }
-    else if(oc === 'alert'){ alertRun++; if(alertRun >= 2){ oc = 'mild'; alertRun = 0; alertConv = true; } }
+    else if(oc === 'alert'){ alertRun++; if(alertRun >= (e.date >= ALERT2_FROM ? 3 : 2)){ oc = 'mild'; alertRun = 0; alertConv = true; } }
     else alertRun = 0;
     if(rsk){
       lastEvent = 'restless';
     } else if(oc === 'alert'){
-      lastEvent = 'alert';
+      lastEvent = (e.date >= ALERT2_FROM && alertRun === 2) ? 'alert2' : 'alert';
     } else if(oc === 'calm'){
       wob = 0; wobMin = null;
       if(hard){
@@ -273,7 +275,7 @@ function pickNext(st, minutes, seed, opts){
   }
   else if(st.level >= FIRST_OUT){
     const r = rand01(seed + '|a');
-    const wob = st.lastEvent === 'wobble' || st.lastEvent === 'wobbleDrop';
+    const wob = st.lastEvent === 'wobble' || st.lastEvent === 'wobbleDrop' || st.lastEvent === 'alert2';
     if(wob) kind = 'easy';
     else if(st.lastEasy || st.lastEvent === 'alert' || st.lastEvent === 'restless') kind = 'hard';   // after an alert, repeat the working step
     else kind = r < 0.60 ? 'hard' : 'easy';
@@ -285,7 +287,7 @@ function pickNext(st, minutes, seed, opts){
   else if(st.level >= 2){
     // Cue stage: 75% working step, 25% one or two rungs easier (never harder). Easier after a wobble.
     const r = rand01(seed + '|a');
-    if(st.lastEvent === 'wobble' || st.lastEvent === 'wobbleDrop' || (!st.lastEasy && st.lastEvent !== 'alert' && st.lastEvent !== 'restless' && r < 0.25)){
+    if(st.lastEvent === 'wobble' || st.lastEvent === 'wobbleDrop' || st.lastEvent === 'alert2' || (!st.lastEasy && st.lastEvent !== 'alert' && st.lastEvent !== 'restless' && r < 0.25)){
       kind = 'easy';
       target = Math.max(0, st.level - (1 + Math.floor(rand01(seed + '|b') * 2)));
     }
@@ -294,7 +296,7 @@ function pickNext(st, minutes, seed, opts){
   if(st.badStep != null && target > st.badStep){ target = st.badStep; if(kind === 'hard') kind = 'easy'; }
   let s = target;
   while(s > 0 && !fits(s, minutes)) s--;
-  return { step: s, targetStep: target, kind, easy: s < st.level, fitted: s < target, afterWobble: st.lastEvent === 'wobble' || st.lastEvent === 'wobbleDrop', warmNo, warmOf };
+  return { step: s, targetStep: target, kind, easy: s < st.level, fitted: s < target, afterWobble: st.lastEvent === 'wobble' || st.lastEvent === 'wobbleDrop', afterAlert2: st.lastEvent === 'alert2', warmNo, warmOf };
 }
 
 // True when this would be the first rep of a session: no ladder rep yet, or the last one was 45+ minutes before `at`.
@@ -380,9 +382,10 @@ function coachMsg(ev, st){
     case 'restless': return st && st.restlessRun >= 2
       ? ['Restless again. Stop for now.', 'Two reps in a row started with her restless. Neither counts against her. Meet her needs first (a sniff walk, a chew, some play), then try again later when she settles on her own.']
       : ['She was restless before this rep.', 'It does not count against her and your count stays. Wait until she lies down and settles on her own before the next rep. If it happens again, stop for now.'];
-    case 'alert': return ['Alert.', 'Quiet, but she showed early stress signs. This rep does not count and your count stays. Repeat this step. A second alert in a row counts as a wobble.'];
-    case 'wobble': return st && st.alertConv ? ['Second alert in a row.', 'That counts as a wobble: the count restarts and the next rep is easier. This is what her edge looks like.'] : ['Small wobble.', 'Repeat this step. This is what her edge looks like.'];
-    case 'wobbleDrop': return [st && st.alertConv ? 'Second alert, and two wobbles in a row.' : 'Two wobbles in a row.', 'You drop a step or two, to below where she struggled, and build back up. The next rep is easier.'];
+    case 'alert': return ['Alert.', 'Quiet, but she showed early stress signs. This rep does not count and your count stays. Repeat this step. If it happens again, the next rep is easier.'];
+    case 'alert2': return ['Second alert in a row.', 'This rep does not count and your count stays. The next rep is easier, as a breather. A third alert in a row counts as a wobble.'];
+    case 'wobble': return st && st.alertConv ? ['Third alert in a row.', 'That counts as a wobble: the count restarts and the next rep is easier. This is what her edge looks like.'] : ['Small wobble.', 'Repeat this step. This is what her edge looks like.'];
+    case 'wobbleDrop': return [st && st.alertConv ? 'Third alert, and two wobbles in a row.' : 'Two wobbles in a row.', 'You drop a step or two, to below where she struggled, and build back up. The next rep is easier.'];
     case 'upset': return ['Rough one.', 'You dropped two steps. Pause for a few hours or until tomorrow.'];
     default: return ['Logged.', ''];
   }
@@ -579,4 +582,4 @@ function buildSummary(entries, days, date, place){
   return L.join('\n');
 }
 
-if(typeof module !== 'undefined') module.exports = { MILESTONES, DUR, TOP, FIRST_OUT, LAST_CUE, QUICK_CEILING, isQuick, STEP_NAMES, CUE_IDS, idOf, indexOfId, stepLabel, stepTag, stepEst, gapSec, fits, need, capFor, sortedByDate, computeState, depsFor, stateFrom, baselineFor, startFor, skippedRanges, barInfo, levelsAfter, rand01, pickNext, ceilingFor, cooldownMs, waitUntil, coachMsg, normalizeEntry, buildSummary, fmtSec, sessionCount, isTiny, restSec, SESSION_MIN, SESSION_MAX, sessionSizeFor, breakMinFor, isSessionStart, warmupPlan, restlessSkip, RESTLESS_FROM, RULES_V2_FROM, CLIMB_FROM, CAP3_FROM, LADDER_VER, shorterStep, GATE, GATE_DAYS, GATE_DAY_REPS, dateAdd, helpAlerts, windowStats, weekCompare, progressSeries };
+if(typeof module !== 'undefined') module.exports = { MILESTONES, DUR, TOP, FIRST_OUT, LAST_CUE, QUICK_CEILING, isQuick, STEP_NAMES, CUE_IDS, idOf, indexOfId, stepLabel, stepTag, stepEst, gapSec, fits, need, capFor, sortedByDate, computeState, depsFor, stateFrom, baselineFor, startFor, skippedRanges, barInfo, levelsAfter, rand01, pickNext, ceilingFor, cooldownMs, waitUntil, coachMsg, normalizeEntry, buildSummary, fmtSec, sessionCount, isTiny, restSec, SESSION_MIN, SESSION_MAX, sessionSizeFor, breakMinFor, isSessionStart, warmupPlan, restlessSkip, ALERT2_FROM, RESTLESS_FROM, RULES_V2_FROM, CLIMB_FROM, CAP3_FROM, LADDER_VER, shorterStep, GATE, GATE_DAYS, GATE_DAY_REPS, dateAdd, helpAlerts, windowStats, weekCompare, progressSeries };

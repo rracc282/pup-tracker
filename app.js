@@ -1,6 +1,6 @@
 // Churro tracker app. Uses logic.js (pure) and Supabase (sync + push queue).
 'use strict';
-const APP_VERSION = '74';
+const APP_VERSION = '75';
 const CFG = window.PT_CONFIG || {};
 const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -608,6 +608,7 @@ function renderRep(){
     if(nx.kind === 'warmup') sub = (nx.warmOf > 1 ? 'Warm-up ' + nx.warmNo + ' of ' + nx.warmOf + '. ' : 'Warm-up. ') + 'It does not count toward moving up, and your step has not changed.';
     else if(nx.fitted) sub = 'A shorter rep that fits your time.';
     else if(nx.afterWobble) sub = 'Easier on purpose after the wobble.';
+    else if(nx.afterAlert2) sub = 'Easier on purpose after the second alert.';
     else if(nx.easy) sub = 'Shorter on purpose, to keep her confident.';
     else sub = 'Working step · ' + st.run + ' of ' + st.need + ' calm in a row' + (st.gate ? ', on ' + st.runDays + ' of 2 days needed' : '') + '.';
     const capLeft = Math.max(1, catLimit(nx.step) - catCount(nx.step));
