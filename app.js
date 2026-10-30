@@ -1,6 +1,6 @@
 // Churro tracker app. Uses logic.js (pure) and Supabase (sync + push queue).
 'use strict';
-const APP_VERSION = '61';
+const APP_VERSION = '62';
 const CFG = window.PT_CONFIG || {};
 const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -773,22 +773,25 @@ function progressHtml(){
   let segs = '';
   for(let k = 1; k < n; k++){
     const a = [xOf(k - 1), yOf(secOf(s[k - 1].start))], c = [xOf(k), yOf(secOf(s[k].start))];
-    segs += `<line x1="${a[0].toFixed(1)}" y1="${a[1].toFixed(1)}" x2="${c[0].toFixed(1)}" y2="${c[1].toFixed(1)}" stroke="${s[k].easier ? 'var(--wobble)' : 'var(--calm)'}" stroke-width="2.5" stroke-linecap="round"${s[k].easier ? ' stroke-dasharray="5 4"' : ''}/>`;
+    segs += `<line x1="${a[0].toFixed(1)}" y1="${a[1].toFixed(1)}" x2="${c[0].toFixed(1)}" y2="${c[1].toFixed(1)}" stroke="${s[k].easier ? 'var(--back)' : 'var(--calm)'}" stroke-width="2.5" stroke-linecap="round"${s[k].easier ? ' stroke-dasharray="5 4"' : ''}/>`;
   }
   const stems = s.map((p, k) => p.maxCalm == null ? '' : `<line x1="${xOf(k).toFixed(1)}" x2="${xOf(k).toFixed(1)}" y1="${yOf(secOf(p.start)).toFixed(1)}" y2="${yOf(p.maxCalm).toFixed(1)}" stroke="var(--ink-2)" stroke-width="1" opacity=".55"/>`).join('');
   const cdots = s.map((p, k) => p.maxCalm == null ? '' : `<rect x="${(xOf(k) - 3.5).toFixed(1)}" y="${(yOf(p.maxCalm) - 3.5).toFixed(1)}" width="7" height="7" transform="rotate(45 ${xOf(k).toFixed(1)} ${yOf(p.maxCalm).toFixed(1)})" fill="var(--surface)" stroke="var(--ink)" stroke-width="1.6"/>`).join('');
-  const wdots = s.map((p, k) => `<circle cx="${xOf(k).toFixed(1)}" cy="${yOf(secOf(p.start)).toFixed(1)}" r="${k === sel ? 4.5 : 3}" fill="${p.easier ? 'var(--wobble)' : 'var(--calm)'}"/>`).join('');
-  const tri = s.map((p, k) => p.easier ? `<polygon points="${(xOf(k) - 4.5).toFixed(1)},${(yOf(secOf(p.start)) + 8).toFixed(1)} ${(xOf(k) + 4.5).toFixed(1)},${(yOf(secOf(p.start)) + 8).toFixed(1)} ${xOf(k).toFixed(1)},${(yOf(secOf(p.start)) + 14).toFixed(1)}" fill="var(--wobble)"/>` : '').join('');
+  const wdots = s.map((p, k) => `<circle cx="${xOf(k).toFixed(1)}" cy="${yOf(secOf(p.start)).toFixed(1)}" r="${k === sel ? 4.5 : 3}" fill="${p.easier ? 'var(--back)' : 'var(--calm)'}"/>`).join('');
+  const rings = s.map((p, k) => p.stalled ? `<circle cx="${xOf(k).toFixed(1)}" cy="${yOf(secOf(p.start)).toFixed(1)}" r="8" fill="none" stroke="var(--wobble)" stroke-width="2"/>` : '').join('');
+  const ticks2 = s.map((p, k) => p.dropped ? `<rect x="${(xOf(k) + 8).toFixed(1)}" y="${(yOf(secOf(p.dropFrom)) - 9).toFixed(1)}" width="4" height="18" rx="2" fill="var(--upset)" stroke="var(--surface)" stroke-width="1.5"/>` : '').join('');
+  const tri = s.map((p, k) => p.easier ? `<polygon points="${(xOf(k) - 4.5).toFixed(1)},${(yOf(secOf(p.start)) + 8).toFixed(1)} ${(xOf(k) + 4.5).toFixed(1)},${(yOf(secOf(p.start)) + 8).toFixed(1)} ${xOf(k).toFixed(1)},${(yOf(secOf(p.start)) + 14).toFixed(1)}" fill="var(--back)"/>` : '').join('');
   const hits = s.map((p, k) => `<rect x="${(xOf(k) - step / 2).toFixed(1)}" y="0" width="${step.toFixed(1)}" height="${H}" fill="transparent" data-progday="${p.date}" style="cursor:pointer"/>`).join('');
   const last = s[n - 1];
   const best = Math.max.apply(null, s.map(p => p.maxCalm == null ? -1 : p.maxCalm));
   const desc = `Working step over time. Now: ${stepLabel(last.end)}.` + (best >= 0 ? ` Longest calm rep so far: ${best === 0 ? 'front door only' : fmtSec(best)}.` : '');
   const nm = x => x === 0 ? 'front door' : fmtSec(x);
+  const why2 = (selP.dropped ? ' · dropped back from ' + stepLabel(selP.dropFrom).replace(/^Out for /, '') + ' to ' + stepLabel(selP.dropTo).replace(/^Out for /, '') : '') + (selP.stalled ? ' · stalled: no net gain over 3 training days' : '');
   const why = selP.easier === 'break' ? ' · started easier after a long break' : selP.easier === 'drop' ? ' · started easier after a step back' : '';
-  const cap1 = `<b>${esc(fmtDay(selP.date).replace(/\/\d{4}$/, ''))}</b> · ${esc(stepLabel(selP.start).replace(/^Out for /, ''))}${selP.end > selP.start ? ' → ' + esc(stepLabel(selP.end).replace(/^Out for /, '')) : selP.end < selP.start ? ' → ' + esc(stepLabel(selP.end).replace(/^Out for /, '')) + ' (stepped back)' : ''} · best calm ${selP.maxCalm == null ? 'none' : nm(selP.maxCalm)} · ${selP.reps} rep${selP.reps === 1 ? '' : 's'} (${selP.calm} calm${selP.alert ? ', ' + selP.alert + ' alert' : ''}${selP.mild ? ', ' + selP.mild + ' wobble' + (selP.mild === 1 ? '' : 's') : ''}${selP.esc ? ', ' + selP.esc + ' upset' + (selP.esc === 1 ? '' : 's') : ''})${why}`;
-  return `<div class="pgwrap" role="img" aria-label="${esc(desc)}"><svg class="pgaxis" viewBox="0 0 50 ${H}" width="50" height="${H}">${axis}</svg><div class="pgscroll"><svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}">${band}${grid}${xa}${segs}${stems}${cdots}${wdots}${tri}${hits}</svg></div></div>
+  const cap1 = `<b>${esc(fmtDay(selP.date).replace(/\/\d{4}$/, ''))}</b> · ${esc(stepLabel(selP.start).replace(/^Out for /, ''))}${selP.end > selP.start ? ' → ' + esc(stepLabel(selP.end).replace(/^Out for /, '')) : selP.end < selP.start ? ' → ' + esc(stepLabel(selP.end).replace(/^Out for /, '')) + ' (stepped back)' : ''} · best calm ${selP.maxCalm == null ? 'none' : nm(selP.maxCalm)} · ${selP.reps} rep${selP.reps === 1 ? '' : 's'} (${selP.calm} calm${selP.alert ? ', ' + selP.alert + ' alert' : ''}${selP.mild ? ', ' + selP.mild + ' wobble' + (selP.mild === 1 ? '' : 's') : ''}${selP.esc ? ', ' + selP.esc + ' upset' + (selP.esc === 1 ? '' : 's') : ''})${why}${why2}`;
+  return `<div class="pgwrap" role="img" aria-label="${esc(desc)}"><svg class="pgaxis" viewBox="0 0 50 ${H}" width="50" height="${H}">${axis}</svg><div class="pgscroll"><svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}">${band}${grid}${xa}${segs}${stems}${cdots}${wdots}${rings}${tri}${ticks2}${hits}</svg></div></div>
     <div class="progcap" aria-live="polite">${cap1}</div>
-    <div class="legend"><span><i class="lg-dot"></i>Working step</span><span><i class="lg-dia"></i>Longest calm</span><span><i class="lg-tri"></i>Started easier</span></div>
+    <div class="legend"><span><i class="lg-dot"></i>Working</span><span><i class="lg-dia"></i>Best calm</span><span><i class="lg-tri"></i>Easier start</span><span><i class="lg-tick"></i>Dropped</span><span><i class="lg-ring"></i>Stalled</span></div>
 `;
 }
 function moreSec(id, title, body, forceOpen){

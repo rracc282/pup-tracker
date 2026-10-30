@@ -423,3 +423,13 @@ console.log('logic tests (3 cue step-ups a day) ok');
   assert.strictEqual(L.computeState(dep,0).level,i10+1);   // departures: one step-up on the first day back
 }
 console.log('logic tests (first day back, cues) ok');
+// graph: dropped and stalled days
+{ const base=[],T0=Date.UTC(2026,10,2,8);let n=0;const D=(day,step,outcome,k)=>mk({id:'g'+(n++),date:'2026-11-'+day,step,outcome,createdAt:T0+(+day)*86400000+k*3600000});
+  const i30=L.DUR.indexOf(30), i40=L.DUR.indexOf(40);
+  const ser=L.progressSeries([D('02',i30,'calm',0),D('02',i30,'calm',1),D('02',i30,'calm',2),D('03',i40,'mild',0),D('03',i40,'mild',1),D('03',i30,'calm',2)].concat(),'home');
+  const d=ser.find(x=>x.date==='2026-11-03'); assert(d,'day exists');
+  // flags exist and are booleans on every day
+  ser.forEach(x=>{assert.strictEqual(typeof x.dropped,'boolean');assert.strictEqual(typeof x.stalled,'boolean');});
+  // a day with no step-down is not dropped
+  assert.strictEqual(ser.find(x=>x.date==='2026-11-02').dropped,false);
+  console.log('logic tests (graph dropped/stalled) ok'); }

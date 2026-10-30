@@ -1,4 +1,4 @@
-const LOGIC_VERSION = '61';
+const LOGIC_VERSION = '62';
 // Pure training logic. No DOM, no network. Loaded by index.html and tested in node.
 // One ladder. Steps 0-5: a cue while she watches. 6-12: cues while she is behind the closed door. 13 and up: seconds spent outside.
 // Time outside per step. Every step has a stable id ('out.<seconds>'), so inserting steps never changes saved history.
@@ -454,6 +454,7 @@ function progressSeries(entries, place){
   mine.forEach((e, i) => {
     const d = byDay.get(e.date) || { date: e.date, start: i ? computeState(mine.slice(0, i), startFor(entries, place), place === 'home' ? e.date : null).level : first, level: 0, end: 0, maxCalm: null, reps: 0, calm: 0, alert: 0, mild: 0, esc: 0 };
     d.level = d.end = lv[i];
+    { const pe = i ? mine[i - 1] : null, pl = i ? lv[i - 1] : null; if(pe && pe.date === e.date && lv[i] < pl){ d.dropFrom = Math.max(d.dropFrom == null ? -1 : d.dropFrom, pl); d.dropTo = d.dropTo == null ? lv[i] : Math.min(d.dropTo, lv[i]); } }
     d.reps++; if(e.outcome === 'calm') d.calm++; else if(e.outcome === 'alert') d.alert++; else if(e.outcome === 'mild') d.mild++; else if(e.outcome === 'escalated') d.esc++;
     // longest time outside that she managed calmly that day (0 = only the front door)
     if(e.outcome === 'calm' && e.step >= LAST_CUE && DUR[e.step] != null) d.maxCalm = Math.max(d.maxCalm == null ? 0 : d.maxCalm, DUR[e.step]);
@@ -466,6 +467,9 @@ function progressSeries(entries, place){
   // easier: she started this day on a lower step than where she finished the day before ('break', after a long break)
   // or lower than the step she started the day before on ('drop', after a wobble or upset).
   out.forEach((d, k) => { d.easier = null; if(k){ const q = out[k - 1]; if(d.start < q.end) d.easier = 'break'; else if(d.start < q.start) d.easier = 'drop'; } });
+  // dropped: she stepped back during this day (wobbles or an upset). dropFrom/dropTo are the steps.
+  // stalled: no net gain over this and the two previous training days (and not already marked as dropped or easier).
+  out.forEach((d, k) => { d.dropped = d.dropFrom != null; d.stalled = k >= 2 && !d.dropped && !d.easier && d.end <= out[k - 2].end; });
   return out;
 }
 
