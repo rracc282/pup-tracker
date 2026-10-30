@@ -429,7 +429,7 @@ console.log('logic tests (first day back, cues) ok');
   const ser=L.progressSeries([D('02',i30,'calm',0),D('02',i30,'calm',1),D('02',i30,'calm',2),D('03',i40,'mild',0),D('03',i40,'mild',1),D('03',i30,'calm',2)].concat(),'home');
   const d=ser.find(x=>x.date==='2026-11-03'); assert(d,'day exists');
   // flags exist and are booleans on every day
-  ser.forEach(x=>{assert.strictEqual(typeof x.dropped,'boolean');assert.strictEqual(typeof x.stalled,'boolean');});
+  ser.forEach(x=>{assert.strictEqual(typeof x.dropped,'boolean');});
   // a day with no step-down is not dropped
   assert.strictEqual(ser.find(x=>x.date==='2026-11-02').dropped,false);
-  console.log('logic tests (graph dropped/stalled) ok'); }
+  console.log('logic tests (graph dropped) ok'); }

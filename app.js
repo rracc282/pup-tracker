@@ -1,6 +1,6 @@
 // Churro tracker app. Uses logic.js (pure) and Supabase (sync + push queue).
 'use strict';
-const APP_VERSION = '63';
+const APP_VERSION = '64';
 const CFG = window.PT_CONFIG || {};
 const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -769,32 +769,27 @@ function progressHtml(){
   });
   let xa = `<line x1="0" x2="${W}" y1="${floor + 12}" y2="${floor + 12}" stroke="var(--ink-2)" stroke-width="1"/>`;
   s.forEach((p, k) => { xa += `<text x="${xOf(k).toFixed(1)}" y="${floor + 28}" text-anchor="middle" font-size="9.5" fill="${k === sel ? 'var(--ink)' : 'var(--ink-2)'}"${k === sel ? ' font-weight="700"' : ''}>${p.date.slice(8)}/${p.date.slice(5, 7)}</text>`; });
-  // Backgrounds: amber band behind stalled days, green band behind the selected day.
-  const bands = s.map((p, k) => p.stalled ? `<rect x="${(k * step).toFixed(1)}" y="0" width="${step.toFixed(1)}" height="${floor + 12}" fill="var(--wobble-bg)"/>` : '').join('')
-    + `<rect x="${(sel * step).toFixed(1)}" y="0" width="${step.toFixed(1)}" height="${H}" fill="var(--calm-bg)" opacity="${selP.stalled ? '.55' : '1'}"/>`;
-  // The path between days: from where she finished one day to where she started the next. Dashed dark green = she started easier.
+  // Green band behind the selected day.
+  const bands = `<rect x="${(sel * step).toFixed(1)}" y="0" width="${step.toFixed(1)}" height="${H}" fill="var(--calm-bg)"/>`;
+  // One line through the working step she started each day on. Dashed dark green = she started that day easier.
   let segs = '';
   for(let k = 1; k < n; k++){
-    segs += `<line x1="${xOf(k - 1).toFixed(1)}" y1="${yOf(secOf(s[k - 1].end)).toFixed(1)}" x2="${xOf(k).toFixed(1)}" y2="${yOf(secOf(s[k].start)).toFixed(1)}" stroke="${s[k].easier ? 'var(--back)' : 'var(--calm)'}" stroke-width="2" stroke-linecap="round"${s[k].easier ? ' stroke-dasharray="4 4"' : ''}/>`;
+    segs += `<line x1="${xOf(k - 1).toFixed(1)}" y1="${yOf(secOf(s[k - 1].start)).toFixed(1)}" x2="${xOf(k).toFixed(1)}" y2="${yOf(secOf(s[k].start)).toFixed(1)}" stroke="${s[k].easier ? 'var(--back)' : 'var(--calm)'}" stroke-width="2.5" stroke-linecap="round"${s[k].easier ? ' stroke-dasharray="5 4"' : ''}/>`;
   }
-  // One pill per day, from the lowest to the highest step she worked on that day. Red = she dropped back that day. Hollow = a day with wobbles.
-  const pills = s.map((p, k) => {
-    const y1 = yOf(secOf(p.high)), y2 = yOf(secOf(p.low)), x = xOf(k), w = 11, col = p.dropped ? 'var(--upset)' : 'var(--calm)';
-    const fill = !p.dropped && (p.mild || p.esc) ? 'var(--surface)' : col;
-    return `<rect x="${(x - w / 2).toFixed(1)}" y="${(y1 - w / 2).toFixed(1)}" width="${w}" height="${(y2 - y1 + w).toFixed(1)}" rx="${w / 2}" fill="${fill}" stroke="${col}" stroke-width="2"/>`;
-  }).join('');
+  // Red dot = she dropped back that day. Dark green triangle = she started the day easier.
+  const dots = s.map((p, k) => `<circle cx="${xOf(k).toFixed(1)}" cy="${yOf(secOf(p.start)).toFixed(1)}" r="${k === sel ? 5 : 3.5}" fill="${p.dropped ? 'var(--upset)' : p.easier ? 'var(--back)' : 'var(--calm)'}"/>`).join('');
+  const tri = s.map((p, k) => p.easier ? `<polygon points="${(xOf(k) - 4.5).toFixed(1)},${(yOf(secOf(p.start)) + 9).toFixed(1)} ${(xOf(k) + 4.5).toFixed(1)},${(yOf(secOf(p.start)) + 9).toFixed(1)} ${xOf(k).toFixed(1)},${(yOf(secOf(p.start)) + 15).toFixed(1)}" fill="var(--back)"/>` : '').join('');
   const hits = s.map((p, k) => `<rect x="${(k * step).toFixed(1)}" y="0" width="${step.toFixed(1)}" height="${H}" fill="transparent" data-progday="${p.date}" style="cursor:pointer"/>`).join('');
   const last = s[n - 1];
   const desc = `Working step over time. Now: ${stepLabel(last.end)}.`;
   const nm = x => x === 0 ? 'front door' : fmtSec(x);
   const short = lv => stepLabel(lv).replace(/^Out for /, '');
   const tags = (selP.dropped ? `<span class="tg drop">Dropped from ${esc(short(selP.dropFrom))} to ${esc(short(selP.dropTo))}</span>` : '')
-    + (selP.easier ? `<span class="tg easy">Started easier${selP.easier === 'break' ? ' after a break' : ' after a step back'}</span>` : '')
-    + (selP.stalled ? '<span class="tg stall">Stalled: no gain in 3 days</span>' : '');
+    + (selP.easier ? `<span class="tg easy">Started easier${selP.easier === 'break' ? ' after a break' : ' after a step back'}</span>` : '');
   const cap1 = `<b>${esc(fmtDay(selP.date).replace(/\/\d{4}$/, ''))}</b> · ${esc(short(selP.start))}${selP.end !== selP.start ? ' → ' + esc(short(selP.end)) : ''} · best calm ${selP.maxCalm == null ? 'none' : nm(selP.maxCalm)} · ${selP.calm} calm${selP.alert ? ', ' + selP.alert + ' alert' : ''}${selP.mild ? ', ' + selP.mild + ' wobble' + (selP.mild === 1 ? '' : 's') : ''}${selP.esc ? ', ' + selP.esc + ' upset' + (selP.esc === 1 ? '' : 's') : ''}${tags ? '<div class="tgs">' + tags + '</div>' : ''}`;
-  return `<div class="pgwrap" role="img" aria-label="${esc(desc)}"><svg class="pgaxis" viewBox="0 0 50 ${H}" width="50" height="${H}">${axis}</svg><div class="pgscroll"><svg viewBox="0 0 ${W.toFixed(1)} ${H}" width="${W.toFixed(1)}" height="${H}">${bands}${grid}${xa}${segs}${pills}${hits}</svg></div></div>
+  return `<div class="pgwrap" role="img" aria-label="${esc(desc)}"><svg class="pgaxis" viewBox="0 0 50 ${H}" width="50" height="${H}">${axis}</svg><div class="pgscroll"><svg viewBox="0 0 ${W.toFixed(1)} ${H}" width="${W.toFixed(1)}" height="${H}">${bands}${grid}${xa}${segs}${dots}${tri}${hits}</svg></div></div>
     <div class="progcap" aria-live="polite">${cap1}</div>
-    <div class="legend"><span><i class="lg-pill"></i>Day</span><span><i class="lg-pill hol"></i>Wobbles</span><span><i class="lg-pill red"></i>Dropped</span><span><i class="lg-dash"></i>Easier start</span><span><i class="lg-band"></i>Stalled</span></div>
+    <div class="legend"><span><i class="lg-dot"></i>Working step</span><span><i class="lg-dot red"></i>Dropped</span><span><i class="lg-tri"></i>Started easier</span></div>
 `;
 }
 function moreSec(id, title, body, forceOpen){

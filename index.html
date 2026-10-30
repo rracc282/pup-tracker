@@ -43,16 +43,13 @@
   .pgscroll svg{display:block;}
   .progcap{font-size:12.5px;color:var(--ink-2);line-height:1.4;margin:4px 0 2px;min-height:2.8em;}
   .progcap b{color:var(--ink);font-weight:600;}
-  .lg-pill{width:9px;height:14px;border-radius:5px;background:var(--calm);border:2px solid var(--calm);box-sizing:border-box;display:inline-block;}
-  .lg-pill.hol{background:var(--surface);}
-  .lg-pill.red{background:var(--upset);border-color:var(--upset);}
-  .lg-dash{width:14px;height:0;border-top:2px dashed var(--back);display:inline-block;}
-  .lg-band{width:12px;height:12px;border-radius:3px;background:var(--wobble-bg);box-shadow:inset 0 0 0 1px var(--wobble);display:inline-block;}
+  .lg-dot{width:10px;height:10px;border-radius:50%;background:var(--calm);display:inline-block;}
+  .lg-dot.red{background:var(--upset);}
+  .lg-tri{width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-top:8px solid var(--back);display:inline-block;}
   .tgs{display:flex;flex-wrap:wrap;gap:6px;margin-top:5px;}
   .tg{font-size:11.5px;font-weight:600;border-radius:999px;padding:2px 9px;}
   .tg.drop{background:var(--upset-bg);color:var(--upset);}
   .tg.easy{background:var(--calm-bg);color:var(--back);}
-  .tg.stall{background:var(--wobble-bg);color:var(--wobble);}
   .legend{display:flex;flex-wrap:nowrap;justify-content:space-between;gap:4px;font-size:10.5px;color:var(--ink-2);margin:6px 0 4px;white-space:nowrap;}
   .legend span{display:inline-flex;align-items:center;gap:4px;}
   @media (prefers-color-scheme: dark){
@@ -433,9 +430,9 @@
 <dialog id="stepsSheet"><div class="stack" id="stepsBody"></div></dialog>
 <dialog id="eodSheet"><div class="stack" id="eodBody"></div></dialog>
 
-<script src="config.js?v=63"></script>
-<script src="supabase.js?v=63"></script>
-<script src="logic.js?v=63"></script>
-<script src="app.js?v=63"></script>
+<script src="config.js?v=64"></script>
+<script src="supabase.js?v=64"></script>
+<script src="logic.js?v=64"></script>
+<script src="app.js?v=64"></script>
 </body>
 </html>
