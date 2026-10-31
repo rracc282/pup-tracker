@@ -582,7 +582,7 @@ function buildSummary(entries, days, date, place){
   const placesUsed = Array.from(new Set(live.filter(e => (e.kind === 'dep' || e.kind === 'baseline')).map(e => e.place || 'home')));
   if(placesUsed.indexOf(place) < 0) placesUsed.unshift(place);
   placesUsed.forEach(p => {
-    const sp = stateFrom(live, p);
+    const sp = stateFrom(live, p, date);
     L.push('- ' + (PLACE_LABEL[p] || p) + (p === place ? ' (today)' : '') + ': ' + stepLabel(sp.level) + (sp.level < FIRST_OUT ? ' (step ' + (sp.level + 1) + ' of 13)' : '') + ', ' + runText(sp) + (sp.level === GATE ? ', on ' + sp.runDays + ' of ' + GATE_DAYS + ' days needed' : '') + '.');
   });
   L.push('Today: ' + dayDeps.length + ' reps (' + c + ' calm, ' + al + ' alert, ' + w + ' wobble, ' + u + ' upset), ' + rests.length + ' rest blocks' + (rests.length ? ' (' + rests.map(r => (r.minutes != null ? r.minutes : '?') + ' min ' + (OUT_LABEL[r.outcome] || '')).join(', ') + ')' : '') + ', alone time: ' + (alone.length ? alone.map(a => a.minutes + ' min ' + (OUT_LABEL[a.outcome] || '') + (a.trazodone ? ' (trazodone given)' : '')).join(', ') : 'none') + '.');
