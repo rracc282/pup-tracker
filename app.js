@@ -1,6 +1,6 @@
 // Churro tracker app. Uses logic.js (pure) and Supabase (sync + push queue).
 'use strict';
-const APP_VERSION = '79';
+const APP_VERSION = '80';
 const CFG = window.PT_CONFIG || {};
 const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -305,7 +305,7 @@ function claudeUrl(){
   return /^https:\/\/claude\.ai\//.test(u) ? u : 'https://claude.ai/new';
 }
 function openEod(){
-  if(ui.mode === 'idle') closeDay();
+  if(ui.mode === 'idle' && todayDeps().length) closeDay();   // only close the day once there are reps today (opening the summary in the morning must not end the day)
   $('eodBody').innerHTML = `<h2>End of day</h2>
     <label class="label" for="eodExtra">Any questions or anything to add about today?</label>
     <textarea class="note" id="eodExtra" placeholder="Optional. Dictate with the mic on your keyboard."></textarea>
