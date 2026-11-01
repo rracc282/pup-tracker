@@ -56,3 +56,9 @@ console.log('plan tests ok');
   assert.strictEqual(L.ceilingFor(new Date('2026-11-04T10:00:00'),'sitter'),10);
 }
 console.log('plan day tests ok');
+{
+  let l=base.slice(); const t=T('2026-11-02',10);
+  l.push(dep('2026-11-02',W,'calm',t,{tags:['Asleep before']}));
+  const pl=L.planFor(l,'home',t+600000,null); assert.strictEqual(pl.idx,0,'asleep rep keeps the slot');
+}
+console.log('asleep slot ok');

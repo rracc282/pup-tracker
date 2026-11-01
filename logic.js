@@ -1,4 +1,4 @@
-const LOGIC_VERSION = '83';
+const LOGIC_VERSION = '84';
 // Pure training logic. No DOM, no network. Loaded by index.html and tested in node.
 // One ladder. Steps 0-5: a cue while she watches. 6-12: cues while she is behind the closed door. 13 and up: seconds spent outside.
 // Time outside per step. Every step has a stable id ('out.<seconds>'), so inserting steps never changes saved history.
@@ -421,7 +421,7 @@ function planFor(list, place, now, cap){
   const st = computeState(own, start, date);
   if(!st.fine || st0.level < FIRST_OUT || st.level < FIRST_OUT) return null;
   const eff = Math.min(st.level, st0.level);
-  const todays = own.filter(e => e.date === date);
+  const todays = own.filter(e => e.date === date && !(e.tags || []).includes('Asleep before'));   // a rep she slept through does not use up a slot
   const slots = planSlots(date, cap, DUR[eff]);
   let light = false, done = false, reason = null;
   let esc = -1; todays.forEach((e, i) => { if(e.outcome === 'escalated') esc = i; });
