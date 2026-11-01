@@ -1,6 +1,6 @@
 // Churro tracker app. Uses logic.js (pure) and Supabase (sync + push queue).
 'use strict';
-const APP_VERSION = '84';
+const APP_VERSION = '85';
 const CFG = window.PT_CONFIG || {};
 const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -341,8 +341,10 @@ function sendEod(){
   try{ ok = document.execCommand('copy'); }catch(e){}
   ta.remove();
   if(!ok){ try{ navigator.clipboard.writeText(text); ok = true; }catch(e){} }
-  $('eodStatus').textContent = ok ? 'Copied. Paste it into the chat and send.' : 'Could not copy. Tap again.';
-  if(ok) window.open(claudeUrl(), '_blank', 'noopener');
+  $('eodStatus').innerHTML = (ok ? 'Copied. ' : 'Could not copy automatically. ') + 'Tap <a href="' + esc(claudeUrl()) + '" target="_blank" rel="noopener"><b>Open Claude</b></a>, paste the summary into a chat and send.'
+    + '<textarea class="note" id="eodText" readonly style="margin-top:8px;height:120px"></textarea><div class="hint">If pasting does not work, press and hold in this box, choose Select all, then Copy.</div>';
+  $('eodText').value = text;
+  if(ok){ try{ window.open(claudeUrl(), '_blank', 'noopener'); }catch(e){} }
 }
 function openMore(){ const m = $('moreCard'); if(m){ m.open = true; m.scrollIntoView({ behavior:'smooth', block:'start' }); } }
 function maybeDeepLink(){
