@@ -1,4 +1,4 @@
-const LOGIC_VERSION = '78';
+const LOGIC_VERSION = '82';
 // Pure training logic. No DOM, no network. Loaded by index.html and tested in node.
 // One ladder. Steps 0-5: a cue while she watches. 6-12: cues while she is behind the closed door. 13 and up: seconds spent outside.
 // Time outside per step. Every step has a stable id ('out.<seconds>'), so inserting steps never changes saved history.
@@ -101,6 +101,10 @@ const ALERT2_FROM = '2026-10-30';
 let WIN_FROM = '2026-10-31';
 const WIN_SIZE = 5, WIN_GOOD = 4;
 function setWinFrom(d){ WIN_FROM = d; }
+// From this date each day follows one planned session (see planFor). Before it the old mix of working and shorter reps applies.
+let PLAN_FROM = '2026-11-02';
+function setPlanFrom(d){ PLAN_FROM = d; }
+function planOn(date){ return !!date && date >= PLAN_FROM; }
 // From WIN_FROM on, departures work in time: a rep within 90% of her working time counts as a working rep, she moves up one small step (about 8%) per five reps,
 // at most about 20% a day. A wobble takes the working time down a quarter, a second one in a row to about half of where it was, an upset to half.
 const HARD_FRAC = 0.9, DAY_RATIO = 1.2;
@@ -370,6 +374,102 @@ function pickNext(st, minutes, seed, opts){
   return { light, step: s, targetStep: target, kind, easy: s < st.level, fitted: s < target, afterWobble: st.lastEvent === 'wobble' || st.lastEvent === 'wobbleDrop', afterAlert2: st.lastEvent === 'alert2', warmNo, warmOf };
 }
 
+
+// ---------- the daily plan (from PLAN_FROM) ----------
+// One session a day, planned from the working time she starts the day on: a warm-up, 3 reps at the working time, 2 just under it (90 to 100%),
+// 3 easier ones (60 to 80%) mixed in, and a short easy rep to finish. The working time never ends the session. A step-up earned during the day
+// shows up in tomorrow's plan. A wobble makes the next rep easy and lowers the rest; an upset ends the plan with one light rep.
+function planSlots(date, cap, dur0){
+  const roles = ['T','T','T','N','N','E','E','E'];
+  let mid = null;
+  for(let k = 0; k < 40 && !mid; k++){
+    const a = roles.map((r, i) => ({ r, k: rand01(date + '|s' + k + '|' + i) })).sort((x, y) => x.k - y.k).map(x => x.r);
+    let run = 0, ok = a[0] !== 'T';
+    a.forEach(r => { run = r === 'E' ? 0 : run + 1; if(run > 2) ok = false; });
+    if(ok || k === 39) mid = a;
+  }
+  const slots = [{ role: 'warm', f: 0.5 + 0.25 * rand01(date + '|f0') }];
+  mid.forEach((r, i) => slots.push({ role: r, f: r === 'E' ? 0.6 + 0.2 * rand01(date + '|f' + (i + 1)) : (r === 'N' ? 0.95 : 1) }));
+  slots.push({ role: 'final', f: 0.5 + 0.15 * rand01(date + '|ff') });
+  // Longer reps (over a minute) per day are limited (5 on a sitter day): drop the easier ones first, then a just-under rep.
+  const longer = () => slots.filter(x => x.role !== 'warm' && x.f * dur0 > 60).length;
+  while(cap != null && longer() > cap){
+    let i = slots.findIndex(x => x.role === 'E' && x.f * dur0 > 60);
+    if(i < 0) i = slots.findIndex(x => x.role === 'N');
+    if(i < 0) break;
+    slots.splice(i, 1);
+  }
+  return slots;
+}
+function slotStep(slot, i, eff, date){
+  if(slot.role === 'T') return eff;
+  if(slot.role === 'N'){
+    const cand = []; for(let j = eff; j >= FIRST_OUT && DUR[j] >= HARD_FRAC * DUR[eff] - 1e-9; j--) cand.push(j);
+    return cand[Math.floor(rand01(date + '|n' + i) * cand.length)];
+  }
+  const s = shorterStep(eff, slot.f, true);
+  if(slot.role === 'warm') return Math.max(DUR[eff] <= 7 ? LAST_CUE : FIRST_OUT, s);
+  return s;
+}
+// list: every live entry; returns null when the plan does not apply (other place, before PLAN_FROM, still at cues).
+function planFor(list, place, now, cap){
+  const date = localDateOf(now);
+  if(place !== 'home' || !planOn(date)) return null;
+  const own = depsFor(list, place), start = startFor(list, place);
+  const st0 = computeState(own.filter(e => e.date < date), start, date);
+  const st = computeState(own, start, date);
+  if(!st.fine || st0.level < FIRST_OUT || st.level < FIRST_OUT) return null;
+  const eff = Math.min(st.level, st0.level);
+  const todays = own.filter(e => e.date === date);
+  const slots = planSlots(date, cap, DUR[eff]);
+  let light = false, done = false, reason = null;
+  let esc = -1; todays.forEach((e, i) => { if(e.outcome === 'escalated') esc = i; });
+  if(esc >= 0){ if(todays.length - 1 > esc){ done = true; reason = 'upset'; } else light = true; }
+  else if(todays.length >= slots.length){ done = true; reason = 'complete'; }
+  const idx = todays.length;
+  let slot = slots[Math.min(idx, slots.length - 1)];
+  const eased = st.lastEvent === 'wobble' || st.lastEvent === 'wobbleDrop' || st.lastEvent === 'alert2';
+  if(eased && idx > 0 && (slot.role === 'T' || slot.role === 'N')) slot = { role: 'E', f: 0.7, adj: true };
+  return { date, eff, st, slots, idx, slot, light, done, reason, todays };
+}
+function pickPlanned(st, minutes, pl){
+  const { eff, slot, idx, date } = pl;
+  let kind = 'hard', target = eff, warmNo = 0, warmOf = 0, light = false;
+  if(pl.light){ light = true; kind = 'easy'; target = shorterStep(eff, 0.3 + 0.2 * rand01(date + '|lt'), true); }
+  else if(slot.adj){ kind = 'easy'; target = shorterStep(eff, 0.7, true); }
+  else {
+    target = slotStep(slot, idx, eff, date);
+    if(slot.role === 'warm'){ kind = 'warmup'; warmNo = 1; warmOf = 1; }
+    else if(target < eff && DUR[target] < HARD_FRAC * DUR[eff] - 1e-9) kind = 'easy';
+  }
+  if(kind === 'easy' && target >= eff) kind = 'hard';
+  if(st.badStep != null && target > st.badStep){ target = st.badStep; if(kind === 'hard') kind = 'easy'; }
+  let s = target;
+  while(s > 0 && !fits(s, minutes)) s--;
+  return { light, step: s, targetStep: target, kind, easy: s < eff, fitted: s < target, afterWobble: st.lastEvent === 'wobble' || st.lastEvent === 'wobbleDrop', afterAlert2: st.lastEvent === 'alert2', warmNo, warmOf, role: slot.role, planned: true };
+}
+// The next rep for this place: from the plan when it applies, else the older mix.
+function pickFor(list, place, now, minutes, cap){
+  const pl = planFor(list, place, now, cap);
+  const st = stateFrom(list, place, localDateOf(now));
+  const seed = place + '|' + depsFor(list, place).length + '|' + st.level;
+  if(pl && !pl.done){ const nx = pickPlanned(st, minutes, pl); nx.plan = pl; nx.st = st; return nx; }
+  const nx = pickNext(st, minutes, seed, { warm: warmupPlan(depsFor(list, place), st, now) });
+  nx.plan = pl; nx.st = st;
+  return nx;
+}
+// For the plan view: one row per slot, done or still to come.
+function planView(list, place, now, cap){
+  const pl = planFor(list, place, now, cap);
+  if(!pl) return null;
+  const rows = pl.slots.map((sl, i) => {
+    const e = pl.todays[i];
+    if(e) return { done: true, step: e.step, outcome: e.outcome, role: sl.role, warm: !!e.warm };
+    return { done: false, step: slotStep(sl, i, pl.eff, pl.date), role: sl.role, next: i === pl.idx && !pl.done };
+  });
+  return { rows, eff: pl.eff, done: pl.done, reason: pl.reason, light: pl.light, st: pl.st };
+}
+
 // True when this would be the first rep of a session: no ladder rep yet, or the last one was 45+ minutes before `at`.
 function isSessionStart(entries, at){
   const deps = entries.filter(e => e.kind === 'dep' && isLive(e));
@@ -400,6 +500,7 @@ function restSec(step, ts){
 function cooldownMs(e){
   if(e.outcome === 'escalated') return 3 * 3600 * 1000;
   let sec = restSec(e.step, e.createdAt);
+  if(planOn(e.date) && (e.place || 'home') === 'home' && e.step >= FIRST_OUT && DUR[e.step] <= 60) sec = 60 + Math.round(60 * hash01((e.createdAt || 0) + 31));   // short reps: a short gap (1 to 2 min)
   if(restlessSkip(e)) sec *= 1.5;
   else if(e.outcome === 'mild') sec *= 2;
   else if(e.outcome === 'alert') sec *= 1.5;
@@ -432,7 +533,7 @@ function waitUntil(depAll){
   }
   const size = sessionSizeFor(list[list.length - run].createdAt || 0, isTiny(last.step));
   const breakMin = breakMinFor(last.createdAt || 0);
-  if(run >= size && last.outcome !== 'escalated'){
+  if(run >= size && last.outcome !== 'escalated' && !planOn(last.date)){
     const brk = (last.createdAt || 0) + breakMin * 60 * 1000;
     if(brk > until){ until = brk; reason = 'session'; }
   }
@@ -658,4 +759,4 @@ function buildSummary(entries, days, date, place){
   return L.join('\n');
 }
 
-if(typeof module !== 'undefined') module.exports = { BASE_DUR, isCoarse, prevCoarse, nextCoarse, downCoarse, downRatio, countsAsHard, isFineDate, HARD_FRAC, DAY_RATIO, MILESTONES, DUR, TOP, FIRST_OUT, LAST_CUE, QUICK_CEILING, TOTAL_CEILING, isQuick, STEP_NAMES, CUE_IDS, idOf, indexOfId, stepLabel, stepTag, stepEst, gapSec, fits, need, capFor, sortedByDate, computeState, depsFor, stateFrom, baselineFor, startFor, skippedRanges, barInfo, levelsAfter, rand01, pickNext, ceilingFor, cooldownMs, waitUntil, coachMsg, normalizeEntry, buildSummary, fmtSec, sessionCount, isTiny, restSec, SESSION_MIN, SESSION_MAX, sessionSizeFor, breakMinFor, isSessionStart, warmupPlan, restlessSkip, ALERT2_FROM, setWinFrom, WIN_SIZE, WIN_GOOD, runText, RESTLESS_FROM, RULES_V2_FROM, CLIMB_FROM, CAP3_FROM, LADDER_VER, shorterStep, GATE, GATE_DAYS, GATE_DAY_REPS, dateAdd, helpAlerts, windowStats, weekCompare, progressSeries };
+if(typeof module !== 'undefined') module.exports = { BASE_DUR, isCoarse, prevCoarse, nextCoarse, downCoarse, downRatio, countsAsHard, isFineDate, HARD_FRAC, DAY_RATIO, MILESTONES, DUR, TOP, FIRST_OUT, LAST_CUE, QUICK_CEILING, TOTAL_CEILING, isQuick, STEP_NAMES, CUE_IDS, idOf, indexOfId, stepLabel, stepTag, stepEst, gapSec, fits, need, capFor, sortedByDate, computeState, depsFor, stateFrom, baselineFor, startFor, skippedRanges, barInfo, levelsAfter, rand01, pickNext, ceilingFor, cooldownMs, waitUntil, coachMsg, normalizeEntry, buildSummary, fmtSec, sessionCount, isTiny, restSec, SESSION_MIN, SESSION_MAX, sessionSizeFor, breakMinFor, isSessionStart, warmupPlan, restlessSkip, ALERT2_FROM, setWinFrom, setPlanFrom, planOn, planFor, planSlots, pickFor, pickPlanned, planView, WIN_SIZE, WIN_GOOD, runText, RESTLESS_FROM, RULES_V2_FROM, CLIMB_FROM, CAP3_FROM, LADDER_VER, shorterStep, GATE, GATE_DAYS, GATE_DAY_REPS, dateAdd, helpAlerts, windowStats, weekCompare, progressSeries };

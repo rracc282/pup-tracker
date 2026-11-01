@@ -1,6 +1,6 @@
 // Churro tracker app. Uses logic.js (pure) and Supabase (sync + push queue).
 'use strict';
-const APP_VERSION = '81';
+const APP_VERSION = '82';
 const CFG = window.PT_CONFIG || {};
 const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -246,7 +246,8 @@ function scheduleReady(){
     const last = live.slice().sort((a,b) => a.createdAt - b.createdAt).pop();
     if(last.outcome === 'escalated') return;
     const st = stateNow(liveEntries(), place);
-    const nx = pickNext(st, effPocket(st), place + '|' + depsFor(liveEntries(), place).length + '|' + st.level, { warm: warmupPlan(depsFor(liveEntries(), place), st, w.until) });
+    const nx = pickFor(liveEntries(), place, w.until, effPocket(st), ceilingFor(new Date(), dayType()));
+    if(nx.plan && nx.plan.done) return;
     if(capReached(nx.step)) return;
     const m = READY_MSGS[Math.floor(Math.random() * READY_MSGS.length)];
     qInsert({ fire_at: new Date(w.until).toISOString(), kind:'ready', tag:'ready', title:m[0], body:m[1], open:'' });
@@ -287,6 +288,20 @@ function openDaySheet(){
 // ---------- step legend (opens when the position card is tapped) ----------
 function openSteps(){
   const st = stateNow(ladderEntries(), place);
+  const pv = planView(ladderEntries(), place, Date.now(), ceilingFor(new Date(), dayType()));
+  if(pv){
+    const nm = { warm:'Warm-up', T:'Working time', N:'Just under', E:'Easier', final:'Easy finish' };
+    const oc = { calm:'calm', mild:'wobble', alert:'alert', escalated:'upset' };
+    let h = '<h2>Today\'s plan</h2><div class="hint" style="margin-bottom:10px">Working time now: ' + esc(stepLabel(pv.eff)) + '. One session. The working time is never the last rep. A step-up you earn today starts tomorrow.</div>';
+    pv.rows.forEach((r, i) => {
+      h += `<div class="steprow${r.next ? ' now' : ''}"><span class="n">${i + 1}</span><span>${esc(stepLabel(r.step))} <em>· ${esc(nm[r.role] || '')}${r.done ? ' · ' + esc(oc[r.outcome] || r.outcome || 'done') : r.next ? ' (next)' : ''}</em></span></div>`;
+    });
+    h += '<div class="hint" style="margin-top:10px">If a rep wobbles, the next one is easier and the rest come down. After an upset: one light rep, then done. Times shown for later reps can change.</div>';
+    h += '<button class="btn" data-action="closesheet">Close</button>';
+    $('stepsBody').innerHTML = h;
+    if(!$('stepsSheet').open) $('stepsSheet').showModal();
+    return;
+  }
   let html = '<h2>All steps</h2>', last = '';
   for(let i = 0; i <= TOP; i++){
     if(i > FIRST_OUT && !isCoarse(i) && i !== st.level) continue;   // in between, the time moves in small steps of about 8%
@@ -607,9 +622,20 @@ function renderRep(){
   if(ui.mode === 'idle'){
     const live = ladderEntries();
     const st = stateNow(live, place);
-    const nx = pickNext(st, effPocket(st), place + '|' + depsFor(live, place).length + '|' + st.level, { warm: warmupPlan(depsFor(live, place), st, Date.now()) });
+    const nx = pickFor(live, place, Date.now(), effPocket(st), ceilingFor(new Date(), dayType()));
+    if(nx.plan && nx.plan.done && !ui.override){
+      $('eodBtn').hidden = true;
+      el.innerHTML = (ui.feedback ? feedbackHtml() : '') + `<div class="eyebrow">${nx.plan.reason === 'upset' ? 'Plan ended' : 'Plan complete'}</div>
+        <div class="rep-label">${nx.plan.reason === 'upset' ? 'That is enough for today' : "Today's plan is done"}</div>
+        <div class="rep-sub">${nx.plan.reason === 'upset' ? 'She had a rough one and then a light rep to end well. Tomorrow starts easier.' : 'One planned session a day is the plan. More will not speed things up.'}</div>
+        <button class="btn primary" data-action="eod">End of day summary</button>
+        <div class="link-row"><button class="link" data-action="override">Keep training anyway</button></div>`;
+      return;
+    }
     let sub;
     if(nx.light) sub = 'A light, easy one to end on a good note. Then stop for today.';
+    else if(nx.plan && nx.kind === 'warmup') sub = 'Warm-up. It does not count toward moving up. Rep 1 of ' + nx.plan.slots.length + ' in today\'s plan.';
+    else if(nx.plan && nx.plan.slot && !nx.plan.slot.adj && nx.kind !== 'warmup' && !nx.fitted) sub = 'Rep ' + (nx.plan.idx + 1) + ' of ' + nx.plan.slots.length + ' in today\'s plan.';
     else if(nx.kind === 'warmup') sub = (nx.warmOf > 1 ? 'Warm-up ' + nx.warmNo + ' of ' + nx.warmOf + '. ' : 'Warm-up. ') + 'It does not count toward moving up, and your step has not changed.';
     else if(nx.fitted) sub = 'A shorter rep that fits your time.';
     else if(nx.afterWobble) sub = 'Easier on purpose after the wobble.';
@@ -1014,7 +1040,7 @@ function startRep(step){
   ui.pre = null;
   { // Remember whether this is the app's warm-up rep: warm-ups do not use up the day's longer-rep limit.
     const live = ladderEntries(), st0 = stateNow(live, place);
-    const nx0 = pickNext(st0, effPocket(st0), place + '|' + depsFor(live, place).length + '|' + st0.level, { warm: warmupPlan(depsFor(live, place), st0, Date.now()) });
+    const nx0 = pickFor(live, place, Date.now(), effPocket(st0), ceilingFor(new Date(), dayType()));
     if(nx0.kind === 'warmup' && nx0.step === step) rep.warm = true;
   }
   if(step >= FIRST_OUT && DUR[step] > UNTIMED_MAX){ ui.mode = 'prep'; ui.rep = rep; }

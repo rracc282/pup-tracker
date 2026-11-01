@@ -1,5 +1,6 @@
 // Time-based departures (ladder with small steps, rules from 31 Oct 2026). Run on the real ladder.
 const assert=require('assert'), L=require('../logic.js');
+L.setPlanFrom('2999-01-01');
 L.setWinFrom('2026-10-31');
 const mk=(o)=>Object.assign({kind:'dep',place:'home',date:'2026-11-03',createdAt:0,outcome:'calm'},o);
 let n=0,T=Date.UTC(2026,10,3,8);

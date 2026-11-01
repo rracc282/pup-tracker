@@ -3,6 +3,7 @@ let seed=12345; const rnd=()=>{seed=(seed*1664525+1013904223)>>>0;return seed/42
 const TOP=L.TOP; let fails=[]; let n=0;
 function check(c,msg,ctx){ if(!c){ fails.push(msg+' '+JSON.stringify(ctx||{})); } n++; }
 const BASE=process.env.PT_LADDER==='base';
+L.setPlanFrom('2999-01-01');
 for(const WINFROM of (BASE?['2999-01-01']:['2026-10-31'])){ L.setWinFrom(WINFROM);
 for(let run=0;run<600;run++){
   const start=Math.floor(rnd()*(TOP+1)); const pFail=[0.05,0.2,0.4][run%3]; const pUp=0.1*rnd();

@@ -1,4 +1,5 @@
 const assert=require('assert'), L=require('../logic.js');
+L.setPlanFrom('2999-01-01');
 L.setWinFrom('2999-01-01');   // the older tests describe the rules before the five-rep window
 const mk=(o)=>Object.assign({kind:'dep',place:'home',date:'2026-10-07',createdAt:0,outcome:'calm'},o);
 let t=1000, id=0;
