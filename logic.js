@@ -1,4 +1,4 @@
-const LOGIC_VERSION = '82';
+const LOGIC_VERSION = '83';
 // Pure training logic. No DOM, no network. Loaded by index.html and tested in node.
 // One ladder. Steps 0-5: a cue while she watches. 6-12: cues while she is behind the closed door. 13 and up: seconds spent outside.
 // Time outside per step. Every step has a stable id ('out.<seconds>'), so inserting steps never changes saved history.
@@ -154,6 +154,7 @@ function computeState(depList, startLevel, asOf){
       level = isFineDate(e.date) && level >= FIRST_OUT ? downRatio(level, 0.8) : prevCoarse(level); run = 0; runDates = new Set(); runAwake = 0; dayAw = {}; win = []; wob = 0; wobMin = null; alertRun = 0;
     }
     if(dayStart[e.date] === undefined){ dayStart[e.date] = level; backDay[e.date] = prevDate != null && dayNum(e.date) - dayNum(prevDate) - 1 >= AWAY_DAYS; }
+    if(prevDate != null && e.date !== prevDate && planOn(e.date) && (e.place || 'home') === 'home' && level >= FIRST_OUT) win = [];   // daily plan: each day's working reps are judged on their own
     prevDate = e.date;
     const fine = isFineDate(e.date) && level >= FIRST_OUT, hard = countsAsHard(e, level);
     lastEasy = !hard;
@@ -479,10 +480,12 @@ function isSessionStart(entries, at){
 }
 // Longer reps per day. dayType: 'home' | 'sitter' | 'weekend' | null (then the weekday decides).
 function ceilingFor(dateObj, dayType){
+  if(dayType !== 'rest' && planOn(localDateOf(dateObj.getTime()))) return 10;   // daily plan: every day follows the same plan, sitter days too
   if(dayType === 'home') return 10;
   if(dayType === 'weekend') return 8;
   if(dayType === 'sitter') return 5;
   if(dayType === 'rest') return 5;
+  if(planOn(localDateOf(dateObj.getTime()))) return 10;
   const d = dateObj.getDay();
   if(d === 3) return 10;
   if(d === 0 || d === 6) return 8;

@@ -47,3 +47,12 @@ const w=L.waitUntil(Array.from({length:8},(_,i)=>dep('2026-11-02',lvl(30),'calm'
 // Before the start date nothing changes
 assert.strictEqual(L.planFor(base,'home',T('2026-11-01',12),null),null);
 console.log('plan tests ok');
+// each day is judged on its own: 2 good reps yesterday + 3 today do not move her up
+{
+  let l=base.slice(); let t=T('2026-11-02',10);
+  for(let i=0;i<3;i++){ l.push(dep('2026-11-02',W,'calm',t)); t+=180000; }
+  for(let i=0;i<3;i++){ l.push(dep('2026-11-03',W,'calm',T('2026-11-03',10)+i*180000)); }
+  assert.strictEqual(L.stateFrom(l,'home','2026-11-04').level,W,'no carry-over');
+  assert.strictEqual(L.ceilingFor(new Date('2026-11-04T10:00:00'),'sitter'),10);
+}
+console.log('plan day tests ok');
