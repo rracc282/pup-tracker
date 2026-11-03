@@ -243,7 +243,7 @@ console.log('logic tests (grandfathering) ok');
   // cue steps never move
   assert.strictEqual(L.indexOfId('door.open'),12); assert.strictEqual(L.indexOfId('out.2'),13);
   // milestones sit on the same times as before
-  assert.strictEqual(D[Number(Object.keys(L.MILESTONES).find(k=>L.MILESTONES[k]==='bins out'))],60);
+  assert.strictEqual(D[Number(Object.keys(L.MILESTONES).find(k=>L.MILESTONES[k]==='a quick errand'))],60);
   console.log('logic tests (finer ladder) ok');
 }
 // ---- shorter reps are real departures that scale with the working step; a rep that does not count is followed by a working-step rep; warm-up plan; step-list pin ----

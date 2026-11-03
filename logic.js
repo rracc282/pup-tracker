@@ -1,4 +1,4 @@
-const LOGIC_VERSION = '85';
+const LOGIC_VERSION = '86';
 // Pure training logic. No DOM, no network. Loaded by index.html and tested in node.
 // One ladder. Steps 0-5: a cue while she watches. 6-12: cues while she is behind the closed door. 13 and up: seconds spent outside.
 // Time outside per step. Every step has a stable id ('out.<seconds>'), so inserting steps never changes saved history.
@@ -48,7 +48,7 @@ const TOTAL_CEILING = 15;            // all reps in a day, short and longer toge
 const QUICK_CEILING = 15;            // cues and out-steps up to 60 s
 function isQuick(i){ return i < FIRST_OUT || DUR[i] <= 60; }
 const MILESTONES = {};
-[[60,'bins out'],[300,'parcel pickup'],[1800,'a quick grocery run'],[3600,'a full grocery shop'],[7200,'a drink with friends'],[14400,'a concert']].forEach(([sec, name]) => { MILESTONES[DUR.indexOf(sec)] = name; });
+[[60,'a quick errand'],[300,'parcel pickup'],[1800,'a quick grocery run'],[3600,'a full grocery shop'],[7200,'a drink with friends'],[14400,'a concert']].forEach(([sec, name]) => { MILESTONES[DUR.indexOf(sec)] = name; });
 const POCKETS = [[2,'2 min'],[5,'5 min'],[15,'15 min'],[30,'30 min'],[60,'1 h'],[120,'2 h'],[270,'4 h+']];
 const STEP_NAMES = [
   'Coat, she watches','Shoes, she watches','Bag, she watches','Keys, she watches','Bolt, she watches','Coat, shoes, bag, keys, bolt, she watches',

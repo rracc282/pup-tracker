@@ -1,6 +1,6 @@
 // Churro tracker app. Uses logic.js (pure) and Supabase (sync + push queue).
 'use strict';
-const APP_VERSION = '85';
+const APP_VERSION = '86';
 const CFG = window.PT_CONFIG || {};
 const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -44,7 +44,7 @@ const PRE_STATES = [['Awake before','Awake'],['Restless before','Restless'],['As
 const TAG_LABEL = { 'Dozing before':'Dozing', 'Asleep before':'Asleep', 'Awake before':'Awake', 'Restless before':'Restless', 'Settled under 10 s':'Under 10 s', 'Settled under 1 min':'Under 1 min', 'Took over 1 min':'Over 1 min', '@walked':'Walked first' };
 const REACTION_TAGS_OLD = ['Asleep before','Awake before','Head up','Stood up','Followed me','Went to the door','Vocalised','Settled under 10 s','Settled under 1 min','Took over 1 min','Outside noise'];
 const SPOTS = ['Sofa','Bed','Crate','Floor'];
-const DAY_TYPES = [['home','Home','Most of the day at home. Room for up to 10 longer reps.'],['sitter','Sitter','Sitter has her. Up to 5 longer reps, plenty of short ones.'],['weekend','Weekend','We may be out a lot. Up to 8 longer reps. Gentle.'],['rest','Rest day','No training today. She just relaxes. Days off help both of you.']];
+const DAY_TYPES = [['home','Home','Most of the day at home.'],['sitter','Sitter','Sitter has her.'],['weekend','Weekend','We may be out a lot. Gentle.'],['rest','Rest day','No training today. She just relaxes. Days off help both of you.']];
 
 // ---------- state ----------
 let sb = null, session = null;
