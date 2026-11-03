@@ -1,4 +1,4 @@
-const LOGIC_VERSION = '87';
+const LOGIC_VERSION = '88';
 // Pure training logic. No DOM, no network. Loaded by index.html and tested in node.
 // One ladder. Steps 0-5: a cue while she watches. 6-12: cues while she is behind the closed door. 13 and up: seconds spent outside.
 // Time outside per step. Every step has a stable id ('out.<seconds>'), so inserting steps never changes saved history.
@@ -101,6 +101,7 @@ const ALERT2_FROM = '2026-10-30';
 let WIN_FROM = '2026-10-31';
 const WIN_SIZE = 5, WIN_GOOD = 4;
 // With the daily plan each day has 4 working reps and 3 good ones (one slip allowed) move her up tomorrow.
+const PLAN_GOOD = 3;   // good working reps in a day (3 or 4 are planned) for tomorrow to go up
 function winSize(date){ return planOn(date) ? 4 : WIN_SIZE; }
 function winGood(date){ return planOn(date) ? 3 : WIN_GOOD; }
 function setWinFrom(d){ WIN_FROM = d; }
@@ -113,7 +114,8 @@ function planOn(date){ return !!date && date >= PLAN_FROM; }
 const HARD_FRAC = 0.9, DAY_RATIO = 1.2;
 function isFineDate(d){ return d >= WIN_FROM; }
 function countsAsHard(e, level){ return e.step >= level || (isFineDate(e.date) && level >= FIRST_OUT && e.step >= FIRST_OUT && DUR[e.step] >= HARD_FRAC * DUR[level] - 1e-9); }   // for the tests only
-function runText(st){ const G = st.winGood || WIN_GOOD, Z = st.winSize || WIN_SIZE; return st.winOn ? Math.min(st.win.good, G) + ' of ' + G + ' calm and awake, ' + Math.min(st.win.n, Z) + ' of ' + Z + ' working reps' : st.run + ' of ' + st.need + ' calm in a row'; }
+function runText(st){ if(st.planDay) return Math.min(st.dayGood, PLAN_GOOD) + ' of ' + PLAN_GOOD + ' working reps calm and awake today' + (st.dayBad ? ' · a wobble today, so no step-up tomorrow' : '');
+  const G = st.winGood || WIN_GOOD, Z = st.winSize || WIN_SIZE; return st.winOn ? Math.min(st.win.good, G) + ' of ' + G + ' calm and awake, ' + Math.min(st.win.n, Z) + ' of ' + Z + ' working reps' : st.run + ' of ' + st.need + ' calm in a row'; }
 function restlessSkip(e){ return !!e && e.date >= RESTLESS_FROM && (e.tags || []).includes('Restless before') && (e.outcome === 'mild' || e.outcome === 'alert'); }
 function capV2a(level){ return level <= 5 ? 3 : level <= 11 ? 2 : level > GATE && DUR[level] <= 10 ? 2 : DUR[level] <= 60 ? 1 : DUR[level] <= 240 ? 2 : 1; }
 // The stricter rules above apply from this day on. Reps logged before it are replayed under the rules she trained with,
@@ -150,14 +152,23 @@ function computeState(depList, startLevel, asOf){
   const dayStart = {}, backDay = {};
   let win = [], rough = {}, dayAw = {}, run = 0, runDates = new Set(), runAwake = 0, wob = 0, wobMin = null, badStep = null, nextEasy = false, lastEvent = null, lastEasy = false;
   const adv = {}, drops = [];
+  // Daily plan (Julie): a day done well moves her up for the next day. Good = calm and awake working reps; any wobble or upset that day blocks it.
+  const dg = {}, db = {};
+  const settle = (d) => {
+    if(d != null && (dg[d] || 0) >= PLAN_GOOD && !db[d] && level >= FIRST_OUT && level < TOP){
+      level++; run = 0; runDates = new Set(); runAwake = 0; dayAw = {}; win = []; wob = 0; wobMin = null; badStep = null; lastEvent = 'advance'; nextEasy = false; lastEasy = false;
+    }
+  };
   for(const e of depList){
+    if(prevDate != null && e.date !== prevDate) settle(prevDate);
     if((e.ladderVer == null ? LADDER_VER : e.ladderVer) !== LADDER_VER && e.level != null) level = e.level;   // reps from an older step list keep their recorded step
     // Back after a long break (Home only): start one step easier.
     if(prevDate != null && e.date !== prevDate && (e.place || 'home') === 'home' && e.date >= BREAK_FROM && dayNum(e.date) - dayNum(prevDate) >= BREAK_DAYS && level > 0){
       level = isFineDate(e.date) && level >= FIRST_OUT ? downRatio(level, 0.8) : prevCoarse(level); run = 0; runDates = new Set(); runAwake = 0; dayAw = {}; win = []; wob = 0; wobMin = null; alertRun = 0;
     }
     if(dayStart[e.date] === undefined){ dayStart[e.date] = level; backDay[e.date] = prevDate != null && dayNum(e.date) - dayNum(prevDate) - 1 >= AWAY_DAYS; }
-    if(prevDate != null && e.date !== prevDate && planOn(e.date) && (e.place || 'home') === 'home' && level >= FIRST_OUT) win = [];   // daily plan: each day's working reps are judged on their own
+    const planRep = planOn(e.date) && (e.place || 'home') === 'home' && level >= FIRST_OUT;
+    if(planRep && prevDate != null && e.date !== prevDate) win = [];
     prevDate = e.date;
     const fine = isFineDate(e.date) && level >= FIRST_OUT, hard = countsAsHard(e, level);
     lastEasy = !hard;
@@ -173,10 +184,15 @@ function computeState(depList, startLevel, asOf){
       lastEvent = 'restless';
     } else if(oc === 'alert'){
       lastEvent = (e.date >= ALERT2_FROM && alertRun === 2) ? 'alert2' : 'alert';
+      if(planRep && hard) db[e.date] = 1;
       if(hard && e.date >= WIN_FROM && level >= FIRST_OUT){ win.push('n'); if(win.length > winSize(e.date)) win.shift(); run = win.filter(x => x === 'g').length; }
     } else if(oc === 'calm'){
       wob = 0; wobMin = null;
-      if(hard){
+      if(hard && planRep){
+        const aw = !(e.tags||[]).includes('Asleep before');
+        if(aw) dg[e.date] = (dg[e.date] || 0) + 1;
+        lastEvent = aw ? 'calmProgress' : 'calmAsleep';
+      } else if(hard){
         const useWin = e.date >= WIN_FROM && level >= FIRST_OUT;
         const awake = !(e.tags||[]).includes('Asleep before');
         let ready = false;
@@ -199,6 +215,7 @@ function computeState(depList, startLevel, asOf){
         lastEvent = 'easyOk';
       }
     } else if(oc === 'mild'){
+      if(planRep) db[e.date] = 1;
       if(e.date < WOBBLE_OK_FROM) rough[e.date] = true;
       if(hard && e.date >= WIN_FROM && level >= FIRST_OUT){ win.push('w'); if(win.length > winSize(e.date)) win.shift(); run = win.filter(x => x === 'g').length; }   // one allowed slip
       else { run = 0; runDates = new Set(); runAwake = 0; dayAw = {}; win = []; }
@@ -215,10 +232,12 @@ function computeState(depList, startLevel, asOf){
       else if(wob >= 2){ const f = level; level = Math.max(0, Math.min(prevCoarse(level), Math.max(downCoarse(level, 2), prevCoarse(wobMin)))); wob = 0; wobMin = null; win = []; run = 0; lastEvent = 'wobbleDrop'; if(level < f) drops.push({ from: f, to: level, why: 'wobbles' }); }
       else lastEvent = 'wobble';
     } else if(oc === 'escalated'){
+      if(planRep) db[e.date] = 1;
       rough[e.date] = true;
       { const f = level; level = fine ? Math.max(FIRST_OUT, downRatio(level, 0.5)) : Math.max(0, downCoarse(level, 2)); run = 0; runDates = new Set(); runAwake = 0; dayAw = {}; win = []; wob = 0; wobMin = null; badStep = e.step; lastEvent = 'upset'; if(level < f) drops.push({ from: f, to: level, why: 'upset' }); }
     }
   }
+  if(asOf && prevDate != null && asOf > prevDate) settle(prevDate);
   // Today has no rep yet and the last training day was 7 or more days ago: show the easier start already.
   if(asOf && prevDate != null && asOf > prevDate && asOf >= BREAK_FROM && dayNum(asOf) - dayNum(prevDate) >= BREAK_DAYS && level > 0){
     eased = { from: level, days: dayNum(asOf) - dayNum(prevDate) };
@@ -227,7 +246,7 @@ function computeState(depList, startLevel, asOf){
   const winOn = level >= FIRST_OUT && ((asOf && asOf >= WIN_FROM) || (prevDate != null && prevDate >= WIN_FROM));
   if(winOn) run = win.filter(x => x === 'g').length;
   const fineNow = (asOf && asOf >= WIN_FROM) || (prevDate != null && prevDate >= WIN_FROM);
-  return { fine: !!fineNow, eased, level, run, runDays: level === GATE ? gateDays(dayAw) : runDates.size, gate: level === GATE, wob, nextEasy, lastEasy, lastEvent, alertConv, restlessRun, badStep, need: winOn ? winGood(asOf || prevDate) : need(level), winGood: winGood(asOf || prevDate), winSize: winSize(asOf || prevDate), drops, winOn, win: { n: win.length, good: win.filter(x => x === 'g').length } };
+  return { fine: !!fineNow, eased, level, run, runDays: level === GATE ? gateDays(dayAw) : runDates.size, gate: level === GATE, wob, nextEasy, lastEasy, lastEvent, alertConv, restlessRun, badStep, need: winOn ? winGood(asOf || prevDate) : need(level), winGood: winGood(asOf || prevDate), winSize: winSize(asOf || prevDate), planDay: level >= FIRST_OUT && planOn(asOf || prevDate), dayGood: dg[asOf || prevDate] || 0, dayBad: !!db[asOf || prevDate], drops, winOn, win: { n: win.length, good: win.filter(x => x === 'g').length } };
 }
 
 // A "baseline" entry says: my step is N from here on (set by hand). Reps before it no longer count.
@@ -383,21 +402,21 @@ function pickNext(st, minutes, seed, opts){
 // One session a day, planned from the working time she starts the day on: a warm-up, 3 reps at the working time, 2 just under it (90 to 100%),
 // 3 easier ones (60 to 80%) mixed in, and a short easy rep to finish. The working time never ends the session. A step-up earned during the day
 // shows up in tomorrow's plan. A wobble makes the next rep easy and lowers the rest; an upset ends the plan with one light rep.
-// How many reps the day has. It varies a little from day to day (8 to 12 now) and shrinks as the working time grows,
+// How many reps the day has. It varies a little from day to day (8 to 12 now) and shrinks as the working time grows (6 to 8 from 15 minutes, 6 from 30),
 // like Julie's advice to cut the number of steps once the target passes about 15 minutes.
 function planCount(date, dur0){
-  const lo = dur0 >= 1800 ? 7 : dur0 >= 900 ? 7 : 8, hi = dur0 >= 1800 ? 7 : dur0 >= 900 ? 9 : 12;
+  const lo = dur0 >= 900 ? 6 : 8, hi = dur0 >= 1800 ? 6 : dur0 >= 900 ? 8 : 12;   // Julie's 15-minute example has 6 steps
   return lo + Math.floor(rand01(date + '|cnt') * (hi - lo + 1));
 }
 // Julie's later exercises: a couple of short warm-up steps, 3 or 4 steps in the target range, mixed with some in-between ones,
 // and the last two much shorter. The working reps (4) sit in the middle, never first and never last.
 function planSlots(date, cap, dur0){
   const N = planCount(date, dur0);
-  const nWarm = N >= 8 ? 2 : 1, nEnd = 2, nWork = 4, nMix = Math.max(0, N - nWarm - nEnd - nWork);
+  const nWarm = N >= 8 ? 2 : 1, nEnd = 2, nWork = N >= 9 && rand01(date + '|nw') < 0.5 ? 4 : 3, nMix = Math.max(0, N - nWarm - nEnd - nWork);
   const slots = [];
   for(let i = 0; i < nWarm; i++) slots.push({ role: 'warm', f: 0.2 + 0.3 * rand01(date + '|f' + i) });
   // working reps: 2 at the working time, 2 just under it, in a seeded order
-  const work = ['T','T','N','N'].map((r, i) => ({ r, k: rand01(date + '|w' + i) })).sort((x, y) => x.k - y.k).map(x => x.r);
+  const work = (nWork === 4 ? ['T','T','N','N'] : ['T','T','N']).map((r, i) => ({ r, k: rand01(date + '|w' + i) })).sort((x, y) => x.k - y.k).map(x => x.r);
   // spread them over nMix + 1 groups, with the in-between reps (60 to 80%) separating the groups
   const groups = nMix + 1, sizes = Array(groups).fill(0);
   for(let i = 0; i < nWork; i++) sizes[(i + Math.floor(rand01(date + '|g') * groups)) % groups]++;

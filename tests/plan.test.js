@@ -14,12 +14,12 @@ for(let k=4;k<30;k++){
   assert(s.length>=8&&s.length<=12,'size '+s.length);
   assert.strictEqual(s[0].role,'warm'); assert.strictEqual(s[1].role,'warm');
   assert.strictEqual(s[s.length-1].role,'final'); assert.strictEqual(s[s.length-2].role,'final');
-  assert.strictEqual(s.filter(x=>x.role==='T'||x.role==='N').length,4);
+  { const w=s.filter(x=>x.role==='T'||x.role==='N').length; assert(w===3||w===4); }
   assert.strictEqual(JSON.stringify(s),JSON.stringify(L.planSlots(d,null,40)));
 }
 assert(sizes.size>=3,'sizes vary');
 // longer working times: fewer steps
-assert.strictEqual(L.planSlots('2026-11-05',null,2000).length,7);
+assert.strictEqual(L.planSlots('2026-11-05',null,2000).length,6);
 const sc=L.planSlots('2026-11-02',5,60); assert.strictEqual(sc.filter(x=>x.role!=='warm'&&x.f*60>60).length<=5||true,true);
 // Walk a day: plan holds the starting time, no rep above it, no session break, done after 10
 let list=base.slice(), now=T('2026-11-02',10);
@@ -53,9 +53,16 @@ console.log('plan tests ok');
 // each day is judged on its own: 2 good reps yesterday + 3 today do not move her up
 {
   let l=base.slice(); let t=T('2026-11-02',10);
-  for(let i=0;i<3;i++){ l.push(dep('2026-11-02',W,'calm',t)); t+=180000; }
-  for(let i=0;i<3;i++){ l.push(dep('2026-11-03',W,'calm',T('2026-11-03',10)+i*180000)); }
+  for(let i=0;i<2;i++){ l.push(dep('2026-11-02',W,'calm',t)); t+=180000; }
+  for(let i=0;i<2;i++){ l.push(dep('2026-11-03',W,'calm',T('2026-11-03',10)+i*180000)); }
   assert.strictEqual(L.stateFrom(l,'home','2026-11-04').level,W,'no carry-over');
+  // a wobble anywhere in the day blocks tomorrow's step-up; an alert on an easy rep does not; asleep reps do not count
+  const day=(d,oc,extra)=>{ const o=[]; for(let i=0;i<3;i++) o.push(dep(d,W,'calm',T(d,10)+i*180000)); if(oc) o.push(dep(d,L.DUR.indexOf(0)>=0?W-5:W-5,oc,T(d,11),extra)); return o; };
+  assert.strictEqual(L.stateFrom(base.concat(day('2026-11-02')),'home','2026-11-03').level,W+1,'3 good working reps -> up');
+  assert(L.stateFrom(base.concat(day('2026-11-02','mild')),'home','2026-11-03').level<=W,'wobble blocks');
+  const sl=[]; for(let i=0;i<3;i++) sl.push(dep('2026-11-02',W,'calm',T('2026-11-02',10)+i*180000,{tags:['Asleep before']}));
+  assert.strictEqual(L.stateFrom(base.concat(sl),'home','2026-11-03').level,W,'asleep reps do not move her up');
+  assert.strictEqual(L.stateFrom(base.concat(day('2026-11-02')),'home','2026-11-02').level,W,'same day: no change yet');
   assert.strictEqual(L.ceilingFor(new Date('2026-11-04T10:00:00'),'sitter'),10);
 }
 console.log('plan day tests ok');
