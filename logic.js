@@ -1,4 +1,4 @@
-const LOGIC_VERSION = '86';
+const LOGIC_VERSION = '87';
 // Pure training logic. No DOM, no network. Loaded by index.html and tested in node.
 // One ladder. Steps 0-5: a cue while she watches. 6-12: cues while she is behind the closed door. 13 and up: seconds spent outside.
 // Time outside per step. Every step has a stable id ('out.<seconds>'), so inserting steps never changes saved history.
@@ -100,6 +100,9 @@ const ALERT2_FROM = '2026-10-30';
 // A wobble, an alert or a calm rep while asleep is the one allowed slip. Repeat as long as needed.
 let WIN_FROM = '2026-10-31';
 const WIN_SIZE = 5, WIN_GOOD = 4;
+// With the daily plan each day has 4 working reps and 3 good ones (one slip allowed) move her up tomorrow.
+function winSize(date){ return planOn(date) ? 4 : WIN_SIZE; }
+function winGood(date){ return planOn(date) ? 3 : WIN_GOOD; }
 function setWinFrom(d){ WIN_FROM = d; }
 // From this date each day follows one planned session (see planFor). Before it the old mix of working and shorter reps applies.
 let PLAN_FROM = '2026-11-02';
@@ -110,7 +113,7 @@ function planOn(date){ return !!date && date >= PLAN_FROM; }
 const HARD_FRAC = 0.9, DAY_RATIO = 1.2;
 function isFineDate(d){ return d >= WIN_FROM; }
 function countsAsHard(e, level){ return e.step >= level || (isFineDate(e.date) && level >= FIRST_OUT && e.step >= FIRST_OUT && DUR[e.step] >= HARD_FRAC * DUR[level] - 1e-9); }   // for the tests only
-function runText(st){ return st.winOn ? Math.min(st.win.good, WIN_GOOD) + ' of ' + WIN_GOOD + ' calm and awake, ' + st.win.n + ' of ' + WIN_SIZE + ' reps' : st.run + ' of ' + st.need + ' calm in a row'; }
+function runText(st){ const G = st.winGood || WIN_GOOD, Z = st.winSize || WIN_SIZE; return st.winOn ? Math.min(st.win.good, G) + ' of ' + G + ' calm and awake, ' + Math.min(st.win.n, Z) + ' of ' + Z + ' working reps' : st.run + ' of ' + st.need + ' calm in a row'; }
 function restlessSkip(e){ return !!e && e.date >= RESTLESS_FROM && (e.tags || []).includes('Restless before') && (e.outcome === 'mild' || e.outcome === 'alert'); }
 function capV2a(level){ return level <= 5 ? 3 : level <= 11 ? 2 : level > GATE && DUR[level] <= 10 ? 2 : DUR[level] <= 60 ? 1 : DUR[level] <= 240 ? 2 : 1; }
 // The stricter rules above apply from this day on. Reps logged before it are replayed under the rules she trained with,
@@ -170,14 +173,14 @@ function computeState(depList, startLevel, asOf){
       lastEvent = 'restless';
     } else if(oc === 'alert'){
       lastEvent = (e.date >= ALERT2_FROM && alertRun === 2) ? 'alert2' : 'alert';
-      if(hard && e.date >= WIN_FROM && level >= FIRST_OUT){ win.push('n'); if(win.length > WIN_SIZE) win.shift(); run = win.filter(x => x === 'g').length; }
+      if(hard && e.date >= WIN_FROM && level >= FIRST_OUT){ win.push('n'); if(win.length > winSize(e.date)) win.shift(); run = win.filter(x => x === 'g').length; }
     } else if(oc === 'calm'){
       wob = 0; wobMin = null;
       if(hard){
         const useWin = e.date >= WIN_FROM && level >= FIRST_OUT;
         const awake = !(e.tags||[]).includes('Asleep before');
         let ready = false;
-        if(useWin){ win.push(awake ? 'g' : 'n'); if(win.length > WIN_SIZE) win.shift(); run = win.filter(x => x === 'g').length; ready = win.length >= WIN_SIZE && run >= WIN_GOOD; }
+        if(useWin){ win.push(awake ? 'g' : 'n'); if(win.length > winSize(e.date)) win.shift(); run = win.filter(x => x === 'g').length; ready = win.length >= winSize(e.date) && run >= winGood(e.date); }
         else { run++; runDates.add(e.date); if(awake){ runAwake++; dayAw[e.date] = (dayAw[e.date] || 0) + 1; } }
         const v2 = e.date >= RULES_V2_FROM, needNow = !v2 ? needV1(level) : (e.date >= NEED3_FROM ? need(level) : needV2a(level)), capNow = !v2 ? capV1(level) : (e.date >= CAP3_FROM ? capFor(level) : capV2a(level));
         if(useWin ? ready : run >= needNow){
@@ -197,7 +200,7 @@ function computeState(depList, startLevel, asOf){
       }
     } else if(oc === 'mild'){
       if(e.date < WOBBLE_OK_FROM) rough[e.date] = true;
-      if(hard && e.date >= WIN_FROM && level >= FIRST_OUT){ win.push('w'); if(win.length > WIN_SIZE) win.shift(); run = win.filter(x => x === 'g').length; }   // one allowed slip
+      if(hard && e.date >= WIN_FROM && level >= FIRST_OUT){ win.push('w'); if(win.length > winSize(e.date)) win.shift(); run = win.filter(x => x === 'g').length; }   // one allowed slip
       else { run = 0; runDates = new Set(); runAwake = 0; dayAw = {}; win = []; }
       wob++; badStep = e.step; wobMin = wobMin == null ? e.step : Math.min(wobMin, e.step);
       // Two wobbles in a row: drop one step, or two when the wobbles happened on easier steps than the working one,
@@ -224,7 +227,7 @@ function computeState(depList, startLevel, asOf){
   const winOn = level >= FIRST_OUT && ((asOf && asOf >= WIN_FROM) || (prevDate != null && prevDate >= WIN_FROM));
   if(winOn) run = win.filter(x => x === 'g').length;
   const fineNow = (asOf && asOf >= WIN_FROM) || (prevDate != null && prevDate >= WIN_FROM);
-  return { fine: !!fineNow, eased, level, run, runDays: level === GATE ? gateDays(dayAw) : runDates.size, gate: level === GATE, wob, nextEasy, lastEasy, lastEvent, alertConv, restlessRun, badStep, need: winOn ? WIN_GOOD : need(level), drops, winOn, win: { n: win.length, good: win.filter(x => x === 'g').length } };
+  return { fine: !!fineNow, eased, level, run, runDays: level === GATE ? gateDays(dayAw) : runDates.size, gate: level === GATE, wob, nextEasy, lastEasy, lastEvent, alertConv, restlessRun, badStep, need: winOn ? winGood(asOf || prevDate) : need(level), winGood: winGood(asOf || prevDate), winSize: winSize(asOf || prevDate), drops, winOn, win: { n: win.length, good: win.filter(x => x === 'g').length } };
 }
 
 // A "baseline" entry says: my step is N from here on (set by hand). Reps before it no longer count.
@@ -380,23 +383,34 @@ function pickNext(st, minutes, seed, opts){
 // One session a day, planned from the working time she starts the day on: a warm-up, 3 reps at the working time, 2 just under it (90 to 100%),
 // 3 easier ones (60 to 80%) mixed in, and a short easy rep to finish. The working time never ends the session. A step-up earned during the day
 // shows up in tomorrow's plan. A wobble makes the next rep easy and lowers the rest; an upset ends the plan with one light rep.
+// How many reps the day has. It varies a little from day to day (8 to 12 now) and shrinks as the working time grows,
+// like Julie's advice to cut the number of steps once the target passes about 15 minutes.
+function planCount(date, dur0){
+  const lo = dur0 >= 1800 ? 7 : dur0 >= 900 ? 7 : 8, hi = dur0 >= 1800 ? 7 : dur0 >= 900 ? 9 : 12;
+  return lo + Math.floor(rand01(date + '|cnt') * (hi - lo + 1));
+}
+// Julie's later exercises: a couple of short warm-up steps, 3 or 4 steps in the target range, mixed with some in-between ones,
+// and the last two much shorter. The working reps (4) sit in the middle, never first and never last.
 function planSlots(date, cap, dur0){
-  const roles = ['T','T','T','N','N','E','E','E'];
-  let mid = null;
-  for(let k = 0; k < 40 && !mid; k++){
-    const a = roles.map((r, i) => ({ r, k: rand01(date + '|s' + k + '|' + i) })).sort((x, y) => x.k - y.k).map(x => x.r);
-    let run = 0, ok = a[0] !== 'T';
-    a.forEach(r => { run = r === 'E' ? 0 : run + 1; if(run > 2) ok = false; });
-    if(ok || k === 39) mid = a;
-  }
-  const slots = [{ role: 'warm', f: 0.5 + 0.25 * rand01(date + '|f0') }];
-  mid.forEach((r, i) => slots.push({ role: r, f: r === 'E' ? 0.6 + 0.2 * rand01(date + '|f' + (i + 1)) : (r === 'N' ? 0.95 : 1) }));
-  slots.push({ role: 'final', f: 0.5 + 0.15 * rand01(date + '|ff') });
-  // Longer reps (over a minute) per day are limited (5 on a sitter day): drop the easier ones first, then a just-under rep.
+  const N = planCount(date, dur0);
+  const nWarm = N >= 8 ? 2 : 1, nEnd = 2, nWork = 4, nMix = Math.max(0, N - nWarm - nEnd - nWork);
+  const slots = [];
+  for(let i = 0; i < nWarm; i++) slots.push({ role: 'warm', f: 0.2 + 0.3 * rand01(date + '|f' + i) });
+  // working reps: 2 at the working time, 2 just under it, in a seeded order
+  const work = ['T','T','N','N'].map((r, i) => ({ r, k: rand01(date + '|w' + i) })).sort((x, y) => x.k - y.k).map(x => x.r);
+  // spread them over nMix + 1 groups, with the in-between reps (60 to 80%) separating the groups
+  const groups = nMix + 1, sizes = Array(groups).fill(0);
+  for(let i = 0; i < nWork; i++) sizes[(i + Math.floor(rand01(date + '|g') * groups)) % groups]++;
+  let wi = 0;
+  sizes.forEach((sz, g) => {
+    for(let j = 0; j < sz; j++){ const r = work[wi++]; slots.push({ role: r, f: r === 'N' ? 0.95 : 1 }); }
+    if(g < nMix) slots.push({ role: 'E', f: 0.6 + 0.2 * rand01(date + '|e' + g) });
+  });
+  for(let i = 0; i < nEnd; i++) slots.push({ role: 'final', f: 0.25 + 0.25 * rand01(date + '|ff' + i) });
+  // Longer reps (over a minute) per day are limited: drop the in-between ones first.
   const longer = () => slots.filter(x => x.role !== 'warm' && x.f * dur0 > 60).length;
   while(cap != null && longer() > cap){
     let i = slots.findIndex(x => x.role === 'E' && x.f * dur0 > 60);
-    if(i < 0) i = slots.findIndex(x => x.role === 'N');
     if(i < 0) break;
     slots.splice(i, 1);
   }
@@ -503,7 +517,7 @@ function restSec(step, ts){
 function cooldownMs(e){
   if(e.outcome === 'escalated') return 3 * 3600 * 1000;
   let sec = restSec(e.step, e.createdAt);
-  if(planOn(e.date) && (e.place || 'home') === 'home' && e.step >= FIRST_OUT && DUR[e.step] <= 60) sec = 60 + Math.round(60 * hash01((e.createdAt || 0) + 31));   // short reps: a short gap (1 to 2 min)
+  if(planOn(e.date) && (e.place || 'home') === 'home' && e.step >= FIRST_OUT && DUR[e.step] <= 60) sec = 30 + Math.round(60 * hash01((e.createdAt || 0) + 31));   // short reps: a short, varied gap (30 to 90 s)
   if(restlessSkip(e)) sec *= 1.5;
   else if(e.outcome === 'mild') sec *= 2;
   else if(e.outcome === 'alert') sec *= 1.5;
@@ -762,4 +776,4 @@ function buildSummary(entries, days, date, place){
   return L.join('\n');
 }
 
-if(typeof module !== 'undefined') module.exports = { BASE_DUR, isCoarse, prevCoarse, nextCoarse, downCoarse, downRatio, countsAsHard, isFineDate, HARD_FRAC, DAY_RATIO, MILESTONES, DUR, TOP, FIRST_OUT, LAST_CUE, QUICK_CEILING, TOTAL_CEILING, isQuick, STEP_NAMES, CUE_IDS, idOf, indexOfId, stepLabel, stepTag, stepEst, gapSec, fits, need, capFor, sortedByDate, computeState, depsFor, stateFrom, baselineFor, startFor, skippedRanges, barInfo, levelsAfter, rand01, pickNext, ceilingFor, cooldownMs, waitUntil, coachMsg, normalizeEntry, buildSummary, fmtSec, sessionCount, isTiny, restSec, SESSION_MIN, SESSION_MAX, sessionSizeFor, breakMinFor, isSessionStart, warmupPlan, restlessSkip, ALERT2_FROM, setWinFrom, setPlanFrom, planOn, planFor, planSlots, pickFor, pickPlanned, planView, WIN_SIZE, WIN_GOOD, runText, RESTLESS_FROM, RULES_V2_FROM, CLIMB_FROM, CAP3_FROM, LADDER_VER, shorterStep, GATE, GATE_DAYS, GATE_DAY_REPS, dateAdd, helpAlerts, windowStats, weekCompare, progressSeries };
+if(typeof module !== 'undefined') module.exports = { BASE_DUR, isCoarse, prevCoarse, nextCoarse, downCoarse, downRatio, countsAsHard, isFineDate, HARD_FRAC, DAY_RATIO, MILESTONES, DUR, TOP, FIRST_OUT, LAST_CUE, QUICK_CEILING, TOTAL_CEILING, isQuick, STEP_NAMES, CUE_IDS, idOf, indexOfId, stepLabel, stepTag, stepEst, gapSec, fits, need, capFor, sortedByDate, computeState, depsFor, stateFrom, baselineFor, startFor, skippedRanges, barInfo, levelsAfter, rand01, pickNext, ceilingFor, cooldownMs, waitUntil, coachMsg, normalizeEntry, buildSummary, fmtSec, sessionCount, isTiny, restSec, SESSION_MIN, SESSION_MAX, sessionSizeFor, breakMinFor, isSessionStart, warmupPlan, restlessSkip, ALERT2_FROM, setWinFrom, setPlanFrom, planCount, planOn, planFor, planSlots, pickFor, pickPlanned, planView, WIN_SIZE, WIN_GOOD, runText, RESTLESS_FROM, RULES_V2_FROM, CLIMB_FROM, CAP3_FROM, LADDER_VER, shorterStep, GATE, GATE_DAYS, GATE_DAY_REPS, dateAdd, helpAlerts, windowStats, weekCompare, progressSeries };

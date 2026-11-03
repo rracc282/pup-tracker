@@ -1,6 +1,6 @@
 // Churro tracker app. Uses logic.js (pure) and Supabase (sync + push queue).
 'use strict';
-const APP_VERSION = '86';
+const APP_VERSION = '87';
 const CFG = window.PT_CONFIG || {};
 const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -406,7 +406,7 @@ function renderPos(){
   renderProgressBox();
   const st = stateNow(ladderEntries(), place);
   $('posNow').textContent = stepLabel(st.level);
-  $('posStep').textContent = (st.level < FIRST_OUT ? 'Step ' + (st.level+1) + ' of 13 · ' : '') + (st.winOn ? Math.min(st.win.good, WIN_GOOD) + ' of ' + WIN_GOOD + ' calm and awake · ' + st.win.n + ' of ' + WIN_SIZE : st.run + ' of ' + st.need + ' calm') + (st.gate ? ' · ' + st.runDays + ' of 2 days' : '') + ' · goal 4 h';
+  $('posStep').textContent = (st.level < FIRST_OUT ? 'Step ' + (st.level+1) + ' of 13 · ' : '') + (st.winOn ? Math.min(st.win.good, st.winGood || WIN_GOOD) + ' of ' + (st.winGood || WIN_GOOD) + ' calm and awake · ' + Math.min(st.win.n, st.winSize || WIN_SIZE) + ' of ' + (st.winSize || WIN_SIZE) : st.run + ' of ' + st.need + ' calm') + (st.gate ? ' · ' + st.runDays + ' of 2 days' : '') + ' · goal 4 h';
   const pct = v => (v / TOP * 100) + '%';
   const info = barInfo(ladderEntries(), place);
   let clip = `<div id="posFill" style="width:${pct(st.level)}"></div>`;
