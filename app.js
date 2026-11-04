@@ -1,6 +1,6 @@
 // Churro tracker app. Uses logic.js (pure) and Supabase (sync + push queue).
 'use strict';
-const APP_VERSION = '97';
+const APP_VERSION = '98';
 const CFG = window.PT_CONFIG || {};
 const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -278,7 +278,7 @@ function openDaySheet(){
   $('dayBody').innerHTML = `<h2>Today</h2>
     <div class="stack">${DAY_TYPES.map(([k,l,h]) => `<button class="out ${cur===k?'calm':''}" data-daytype="${k}"><b>${l}</b><span>${h}</span></button>`).join('')}</div>
     <span class="label" style="margin:2px 0 -4px">Where will you be?</span>
-    <div class="chips">${PLACES.map(([k,l]) => `<button class="chip" data-place="${k}" aria-pressed="${dayPlace()===k}">${l}</button>`).join('')}</div>
+    <div class="chips three">${PLACES.map(([k,l]) => `<button class="chip" data-place="${k}" aria-pressed="${dayPlace()===k}">${l}</button>`).join('')}</div>
     <div class="toggle"><div><b>Medicated today</b><span class="hint">Reps still get logged and counted for spacing, but they do not move the ladder.</span></div>
       <button class="chip" id="medToggle" data-action="medtoggle" aria-pressed="${isMedicated()}">${isMedicated() ? 'Yes' : 'No'}</button></div>
     <button class="btn" data-action="closesheet">Done</button>`;
