@@ -158,6 +158,9 @@
   .btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);}
   .btn.danger{background:var(--upset-bg);color:var(--upset);border-color:var(--upset);}
   .btn + .btn{margin-top:10px;}
+  #eodBtn{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:16px;min-height:0;font-family:var(--font-display);font-weight:700;font-size:17px;text-align:left;display:flex;justify-content:space-between;align-items:center;}
+  #eodBtn::after{content:"›";font-family:var(--font-mono);color:var(--ink-2);}
+  #eodBtn[hidden]{display:none;}
   .btn:disabled{opacity:.5;cursor:not-allowed;}
   details.help{margin:0 0 14px;font-size:13.5px;}
   details.help summary{cursor:pointer;font-weight:600;color:var(--ink-2);min-height:32px;display:flex;align-items:center;}
@@ -446,9 +449,9 @@
 <dialog id="stepsSheet"><div class="stack" id="stepsBody"></div></dialog>
 <dialog id="eodSheet"><div class="stack" id="eodBody"></div></dialog>
 
-<script src="config.js?v=91"></script>
-<script src="supabase.js?v=91"></script>
-<script src="logic.js?v=91"></script>
-<script src="app.js?v=91"></script>
+<script src="config.js?v=92"></script>
+<script src="supabase.js?v=92"></script>
+<script src="logic.js?v=92"></script>
+<script src="app.js?v=92"></script>
 </body>
 </html>
