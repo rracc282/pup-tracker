@@ -1,6 +1,6 @@
 // Churro tracker app. Uses logic.js (pure) and Supabase (sync + push queue).
 'use strict';
-const APP_VERSION = '92';
+const APP_VERSION = '93';
 const CFG = window.PT_CONFIG || {};
 const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -406,7 +406,10 @@ function renderPos(){
   renderProgressBox();
   const st = stateNow(ladderEntries(), place);
   const pv = planView(ladderEntries(), place, Date.now(), ceilingFor(new Date(), dayType()));
-  $('posNow').textContent = stepLabel(pv ? pv.eff : st.level);
+  // Once today's plan is finished, show tomorrow's working time already.
+  const tom = pv && pv.done ? stateFrom(ladderEntries(), place, dateAdd(todayStr(), 1)).level : null;
+  $('posNow').textContent = stepLabel(tom != null ? tom : pv ? pv.eff : st.level);
+  $('posEye').textContent = tom != null ? "Tomorrow's working step" : 'Working step';
   const pct = v => (v / TOP * 100) + '%';
   let pctBar;
   if(pv){
@@ -639,7 +642,7 @@ function renderRep(){
       $('eodBtn').hidden = true;
       el.innerHTML = (ui.feedback ? feedbackHtml() : '') + `<div class="eyebrow">${nx.plan.reason === 'upset' ? 'Plan ended' : 'Plan complete'}</div>
         <div class="rep-label">${nx.plan.reason === 'upset' ? 'That is enough for today' : "Today's plan is done"}</div>
-        <div class="rep-sub">${nx.plan.reason === 'upset' ? 'She had a rough one and then a light rep to end well. Tomorrow starts easier.' : 'One planned session a day is the plan. More will not speed things up.'}</div>
+        <div class="rep-sub">${nx.plan.reason === 'upset' ? 'She had a rough one and then a light rep to end well.' : 'You finished the plan. More will not speed things up.'} Tomorrow's working time: ${esc(stepLabel(stateFrom(live, place, dateAdd(todayStr(), 1)).level))}.</div>
         <button class="btn primary" data-action="eod">End of day summary</button>
         <div class="link-row"><button class="link" data-action="override">Keep training anyway</button></div>`;
       return;
