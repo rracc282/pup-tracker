@@ -1,6 +1,6 @@
 // Churro tracker app. Uses logic.js (pure) and Supabase (sync + push queue).
 'use strict';
-const APP_VERSION = '90';
+const APP_VERSION = '91';
 const CFG = window.PT_CONFIG || {};
 const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -572,7 +572,7 @@ function bannersHtml(step){
   } else if(!isMedicated() && stateNow(ladderEntries(), place).lastEvent === 'capped' && last && last.date === todayStr()){
     h += `<div class="banner info">No more step-ups today. More reps at this step are fine, up to today's limit. Some will be shorter on purpose.</div>`;
   } else if(capReached(step)){
-    h += `<div class="banner info">That is enough for today: you reached the limit of ${capWhat(step)}. More will not speed things up. Rest blocks still help.</div>`;
+    h += `<div class="banner info">That is enough for today: you reached the limit of ${capWhat(step)}. More will not speed things up.</div>`;
   }
   if(!todays.length && !isMedicated()){
     const sn = stateNow(ladderEntries(), place);
@@ -738,7 +738,6 @@ function renderToday(){
   const cueN = deps.filter(e => isQuick(e.step)).length;
   const outN = deps.filter(e => !isQuick(e.step) && !e.warm).length;
   const rests = liveEntries().filter(e => e.kind === 'rest' && e.date === t).length;
-  $('restBtn').disabled = ui.mode !== 'idle';
   const st = stateNow(ladderEntries(), place);
   const showLong = outN > 0 || (st.level >= FIRST_OUT && DUR[st.level] > 60);
   const tile = (label, n) => `<div class="tile"><b>${n}</b><span>${label}</span></div>`;
@@ -1073,11 +1072,6 @@ async function goOut(){
     if(id && ui.rep){ ui.rep.queueId = id; saveActive(); }
   }
 }
-function startRest(){
-  flushNote(); ui.feedback = null; primeAudio();
-  ui.rep = { kind:'rest', place, startedAt: Date.now(), alerted:false };
-  ui.mode = 'run'; saveActive(); startTicking(); render({ rep:true });
-}
 function finishRun(early){
   const r = ui.rep; if(!r) return;
   r.actualSec = Math.round((Date.now() - r.startedAt) / 1000);
@@ -1198,7 +1192,6 @@ document.addEventListener('click', ev => {
     case 'cancel': case 'discard': cancelRep(); break;
     case 'cueadd': cuesAdd(1); renderCues(); renderProgressBox(); break;
     case 'cuesub': cuesAdd(-1); renderCues(); renderProgressBox(); break;
-    case 'startrest': startRest(); break;
     case 'override': ui.override = true; renderRep(); break;
     case 'fbsame': if(ui.feedback){ const d = lastRepDetails(); if(d){ const f = ui.feedback; f.note = ($('fbNote') && $('fbNote').value) || f.note; f.tags = Array.from(new Set(f.tags.concat(d.tags))); f.pocket = d.pocket.slice(); f.walked = d.walked; f.partner = d.partner; flushNote(); renderRep(); } } break;
     case 'fbopen': if(ui.feedback){ ui.feedback.note = ($('fbNote') && $('fbNote').value) || ui.feedback.note; ui.feedback.open = true; renderRep(); } break;
