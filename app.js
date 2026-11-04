@@ -1,6 +1,6 @@
 // Churro tracker app. Uses logic.js (pure) and Supabase (sync + push queue).
 'use strict';
-const APP_VERSION = '93';
+const APP_VERSION = '94';
 const CFG = window.PT_CONFIG || {};
 const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -288,11 +288,17 @@ function openDaySheet(){
 // ---------- step legend (opens when the position card is tapped) ----------
 function openSteps(){
   const st = stateNow(ladderEntries(), place);
-  const pv = planView(ladderEntries(), place, Date.now(), ceilingFor(new Date(), dayType()));
+  let pv = planView(ladderEntries(), place, Date.now(), ceilingFor(new Date(), dayType()));
+  let tomorrowView = false;
+  if(pv && pv.done){   // today's plan is finished: show tomorrow's
+    const tms = new Date(dateAdd(todayStr(), 1) + 'T12:00:00').getTime();
+    const pt = planView(ladderEntries(), place, tms, ceilingFor(new Date(tms), dayType()));
+    if(pt){ pv = pt; tomorrowView = true; }
+  }
   if(pv){
     const nm = { warm:'Warm-up', T:'Working time', N:'Just under', E:'Easier', final:'Easy finish' };
     const oc = { calm:'calm', mild:'wobble', alert:'alert', escalated:'upset' };
-    let h = '<h2>Today\'s plan</h2><div class="hint" style="margin-bottom:10px">Working time now: ' + esc(stepLabel(pv.eff)) + '. One session. The working time is never the last rep. A step-up you earn today starts tomorrow.</div>';
+    let h = (tomorrowView ? '<h2>Tomorrow\'s plan</h2>' : '<h2>Today\'s plan</h2>') + '<div class="hint" style="margin-bottom:10px">' + (tomorrowView ? 'Today is done. Working time tomorrow: ' : 'Working time now: ') + esc(stepLabel(pv.eff)) + '. One session. The working time is never the last rep.' + (tomorrowView ? ' It can still change if tomorrow does not go to plan.' : ' A step-up you earn today starts tomorrow.') + '</div>';
     pv.rows.forEach((r, i) => {
       h += `<div class="steprow${r.next ? ' now' : ''}"><span class="n">${i + 1}</span><span>${esc(stepLabel(r.step))} <em>· ${esc(nm[r.role] || '')}${r.done ? ' · ' + esc(oc[r.outcome] || r.outcome || 'done') : r.next ? ' (next)' : ''}</em></span></div>`;
     });
