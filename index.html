@@ -158,6 +158,7 @@
   .btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);}
   .btn.danger{background:var(--upset-bg);color:var(--upset);border-color:var(--upset);}
   .btn + .btn{margin-top:10px;}
+  #todayCard{margin-bottom:12px;}
   #eodBtn{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:16px;min-height:0;font-family:var(--font-display);font-weight:700;font-size:17px;text-align:left;display:flex;justify-content:space-between;align-items:center;}
   #eodBtn::after{content:"›";font-family:var(--font-mono);color:var(--ink-2);}
   #eodBtn[hidden]{display:none;}
@@ -215,7 +216,7 @@
   .bud i{font-style:normal;color:var(--ink-2);font-size:12.5px;}
   .bud b{font-family:var(--font-mono);font-weight:500;}
   .bud em{font-style:normal;color:var(--ink-2);font-size:12.5px;}
-  .tiles{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-bottom:12px;}
+  .tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:12px;}
   .tile{border:1px solid var(--line);border-radius:10px;padding:6px 2px 5px;text-align:center;display:flex;flex-direction:column;gap:1px;}
   .tile b{font-family:var(--font-mono);font-weight:500;font-size:17px;line-height:1.2;}
   .tile span{font-size:11px;color:var(--ink-2);}
@@ -368,17 +369,12 @@
 
   <button class="btn" data-action="eod" id="eodBtn">End of day summary</button>
 
-  <details class="card" id="dayCard">
-    <summary>Today and progress</summary>
-    <div class="stack">
-      <div id="progCard" hidden></div>
-      <div id="todayCard"></div>
-      <details id="logCard" class="msec">
-        <summary>Log</summary>
-        <div id="logList"></div>
-      </details>
+  <section class="card" id="progCard" hidden></section>
 
-    </div>
+  <details class="card" id="logCard">
+    <summary>Log</summary>
+    <div id="todayCard"></div>
+    <div id="logList"></div>
   </details>
 
   <details class="card" id="moreCard">
@@ -449,9 +445,9 @@
 <dialog id="stepsSheet"><div class="stack" id="stepsBody"></div></dialog>
 <dialog id="eodSheet"><div class="stack" id="eodBody"></div></dialog>
 
-<script src="config.js?v=96"></script>
-<script src="supabase.js?v=96"></script>
-<script src="logic.js?v=96"></script>
-<script src="app.js?v=96"></script>
+<script src="config.js?v=97"></script>
+<script src="supabase.js?v=97"></script>
+<script src="logic.js?v=97"></script>
+<script src="app.js?v=97"></script>
 </body>
 </html>

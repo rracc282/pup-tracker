@@ -1,6 +1,6 @@
 // Churro tracker app. Uses logic.js (pure) and Supabase (sync + push queue).
 'use strict';
-const APP_VERSION = '96';
+const APP_VERSION = '97';
 const CFG = window.PT_CONFIG || {};
 const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -423,7 +423,7 @@ function renderPos(){
     const done = pv.rows.filter(r => r.done).length, total = pv.rows.length;
     $('posStep').textContent = (pv.done ? 'Plan done' : done + ' of ' + total + ' reps') + ' · ' + Math.min(st.dayGood || 0, 3) + ' of 3 good';
     pctBar = pv.done ? 100 : Math.round(done / total * 100);
-    $('posBar').innerHTML = `<div class="barclip"><div id="posFill" style="width:${pctBar}%"></div></div>`;
+    $('posBar').innerHTML = `<div class="barclip">${pctBar ? `<div id="posFill" style="width:${pctBar}%"></div>` : ''}</div>`;   // no reps yet today: an empty bar
     $('posBar').setAttribute('aria-valuenow', pctBar);
     $('posNext').textContent = '';
     $('posLegend').innerHTML = '';
@@ -754,7 +754,7 @@ function renderToday(){
     <div class="budget">
       ${showLong ? `<div class="bud"><span>Longer reps <i>(over 1 min)</i></span><b>${outN} <em>of ${ceilingFor(new Date(), dayType())}</em></b></div>` : ''}
     </div>
-    <div class="tiles">${tile('Calm', c)}${tile('Alert', al)}${tile('Wobble', w)}${tile('Upset', u)}${tile('Rests', rests)}</div>
+    <div class="tiles">${tile('Calm', c)}${tile('Alert', al)}${tile('Wobble', w)}${tile('Upset', u)}</div>
 `;
 }
 
@@ -1315,4 +1315,3 @@ document.addEventListener('click', ev => {
 });
 // Tap a day on the progress graph to see it. Opening the card scrolls the graph to today unless she has scrolled it herself.
 document.addEventListener('click', ev => { const d = ev.target.closest && ev.target.closest('[data-progday]'); if(d){ ui.progSel = d.getAttribute('data-progday'); ui.progUser = true; renderProgressBox(); } });
-document.addEventListener('toggle', ev => { if(ev.target && ev.target.id === 'dayCard' && ev.target.open){ const sc = document.querySelector('#progCard .pgscroll'); if(sc && !ui.progUser) sc.scrollLeft = sc.scrollWidth; } }, true);
