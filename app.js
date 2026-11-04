@@ -1,6 +1,6 @@
 // Churro tracker app. Uses logic.js (pure) and Supabase (sync + push queue).
 'use strict';
-const APP_VERSION = '89';
+const APP_VERSION = '90';
 const CFG = window.PT_CONFIG || {};
 const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -405,9 +405,23 @@ function renderProgressBox(){
 function renderPos(){
   renderProgressBox();
   const st = stateNow(ladderEntries(), place);
-  $('posNow').textContent = stepLabel(st.level);
-  $('posStep').textContent = (st.level < FIRST_OUT ? 'Step ' + (st.level+1) + ' of 13 · ' : '') + (st.planDay ? runText(st) : st.winOn ? Math.min(st.win.good, st.winGood || WIN_GOOD) + ' of ' + (st.winGood || WIN_GOOD) + ' calm and awake · ' + Math.min(st.win.n, st.winSize || WIN_SIZE) + ' of ' + (st.winSize || WIN_SIZE) : st.run + ' of ' + st.need + ' calm') + (st.gate ? ' · ' + st.runDays + ' of 2 days' : '') + ' · goal 4 h';
+  const pv = planView(ladderEntries(), place, Date.now(), ceilingFor(new Date(), dayType()));
+  $('posNow').textContent = stepLabel(pv ? pv.eff : st.level);
   const pct = v => (v / TOP * 100) + '%';
+  let pctBar;
+  if(pv){
+    // The bar shows how much of today's plan is done, not a place on the ladder.
+    const done = pv.rows.filter(r => r.done).length, total = pv.rows.length;
+    $('posStep').textContent = (pv.done ? 'Plan done' : done + ' of ' + total + ' reps') + ' · ' + Math.min(st.dayGood || 0, 3) + ' of 3 good';
+    pctBar = pv.done ? 100 : Math.round(done / total * 100);
+    $('posBar').innerHTML = `<div class="barclip"><div id="posFill" style="width:${pctBar}%"></div></div>`;
+    $('posBar').setAttribute('aria-valuenow', pctBar);
+    $('posNext').textContent = '';
+    $('posLegend').innerHTML = '';
+    const note0 = $('posNote'); note0.hidden = true;
+    return;
+  }
+  $('posStep').textContent = (st.level < FIRST_OUT ? 'Step ' + (st.level+1) + ' of 13 · ' : '') + (st.winOn ? Math.min(st.win.good, st.winGood || WIN_GOOD) + ' of ' + (st.winGood || WIN_GOOD) + ' calm and awake · ' + Math.min(st.win.n, st.winSize || WIN_SIZE) + ' of ' + (st.winSize || WIN_SIZE) : st.run + ' of ' + st.need + ' calm') + (st.gate ? ' · ' + st.runDays + ' of 2 days' : '');
   const info = barInfo(ladderEntries(), place);
   let clip = `<div id="posFill" style="width:${pct(st.level)}"></div>`;
   info.skipped.forEach(r => { const to = Math.min(r.to, st.level); if(to > r.from) clip += `<div class="seg skip" style="left:${pct(r.from)};width:${pct(to - r.from)}"></div>`; });
@@ -416,11 +430,7 @@ function renderPos(){
   info.marks.forEach(m => { marks += `<div class="mark" style="left:${pct(m)}" title="Dropped back from here"></div>`; });
   $('posBar').innerHTML = `<div class="barclip">${clip}</div>${marks}`;
   $('posBar').setAttribute('aria-valuenow', Math.round(st.level / TOP * 100));
-  let nextM = null;
-  for(let k = st.level + 1; k <= TOP; k++){ if(MILESTONES[k]){ nextM = k; break; } }
-  $('posNext').textContent = nextM != null
-    ? 'Next milestone: ' + fmtSec(DUR[nextM]) + ' (' + MILESTONES[nextM] + ')'
-    : 'You are at the top of the ladder.';
+  $('posNext').textContent = '';
   const legend = [];
   if(info.skipped.length) legend.push('Orange: steps you set by hand, not earned by reps.');
   if(info.regressed.length) legend.push('Dark green: steps you stepped back from, still to re-earn.');

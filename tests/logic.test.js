@@ -242,7 +242,6 @@ console.log('logic tests (grandfathering) ok');
   const bl=L.normalizeEntry({kind:'baseline',level:26,from:13}); assert.strictEqual(D[bl.level],300); assert.strictEqual(bl.from,13);
   // cue steps never move
   assert.strictEqual(L.indexOfId('door.open'),12); assert.strictEqual(L.indexOfId('out.2'),13);
-  // milestones sit on the same times as before
   console.log('logic tests (finer ladder) ok');
 }
 // ---- shorter reps are real departures that scale with the working step; a rep that does not count is followed by a working-step rep; warm-up plan; step-list pin ----

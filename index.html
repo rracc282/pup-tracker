@@ -136,7 +136,9 @@
   .where{display:flex;flex-direction:column;gap:8px;}
   .pos-row{display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap;}
   .pos-now{font-family:var(--font-display);font-weight:700;font-size:20px;}
-  .pos-step{font-family:var(--font-mono);font-size:12px;color:var(--ink-2);}
+  .pos-step{font-family:var(--font-mono);font-size:12px;color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;flex:0 1 auto;}
+  .pos-row{flex-wrap:nowrap !important;gap:8px;}
+  .pos-now{white-space:nowrap;flex:0 0 auto;}
   .bar{height:10px;border-radius:999px;background:var(--line);overflow:hidden;}
   .bar > div{height:100%;background:var(--accent);border-radius:999px;transition:width .4s ease;}
   .pos-next{font-size:13px;color:var(--ink-2);}
@@ -445,9 +447,9 @@
 <dialog id="stepsSheet"><div class="stack" id="stepsBody"></div></dialog>
 <dialog id="eodSheet"><div class="stack" id="eodBody"></div></dialog>
 
-<script src="config.js?v=89"></script>
-<script src="supabase.js?v=89"></script>
-<script src="logic.js?v=89"></script>
-<script src="app.js?v=89"></script>
+<script src="config.js?v=90"></script>
+<script src="supabase.js?v=90"></script>
+<script src="logic.js?v=90"></script>
+<script src="app.js?v=90"></script>
 </body>
 </html>
