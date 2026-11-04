@@ -1,6 +1,6 @@
 // Churro tracker app. Uses logic.js (pure) and Supabase (sync + push queue).
 'use strict';
-const APP_VERSION = '94';
+const APP_VERSION = '95';
 const CFG = window.PT_CONFIG || {};
 const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -823,11 +823,15 @@ function progressHtml(){
   if(!s || s.length < 2) return s ? '<div class="hint">The graph starts on the first day of the front door step and needs a second day to draw a line.</div>' : '';
   const secOf = lv => (lv >= FIRST_OUT ? DUR[lv] : 0);
   // The scale grows with her progress, so early on the graph stays small and the first steps get room.
-  const allTicks = [[0, 'Door only'], [2, '2 s'], [5, '5 s'], [10, '10 s'], [20, '20 s'], [30, '30 s'], [60, '1 min'], [120, '2 min'], [300, '5 min'], [900, '15 min'], [3600, '1 h'], [7200, '2 h'], [14400, '4 h goal']];
+  // The height is a log scale: every doubling of the time gets the same height, so each small step up (about 8%) looks the same size
+  // whether she is at 5 seconds or 5 minutes. The grid lines sit one doubling apart, so they are evenly spaced.
+  const allTicks = [[2, '2 s'], [4, '4 s'], [8, '8 s'], [15, '15 s'], [30, '30 s'], [60, '1 min'], [120, '2 min'], [240, '4 min'], [480, '8 min'], [900, '15 min'], [1800, '30 min'], [3600, '1 h'], [7200, '2 h'], [14400, '4 h goal']];
   const bestOf = p => (p.maxCalm != null ? p.maxCalm : secOf(p.start));
   const reached = Math.max.apply(null, s.map(p => Math.max(bestOf(p), secOf(p.high))));
   const cap = (allTicks.find(t => t[0] >= reached * 1.25 && t[0] >= 60) || allTicks[allTicks.length - 1])[0];
-  const ticks = allTicks.filter(t => t[0] <= cap && (t[0] === 0 || t[0] >= 2) && (cap > 300 ? ![5, 20, 30, 120].includes(t[0]) : cap > 120 ? t[0] !== 20 : true));
+  let ticks = allTicks.filter(t => t[0] <= cap);
+  if(ticks.length > 8) ticks = ticks.filter((t, i) => i % 2 === 0 || t[0] === cap);
+  ticks = [[0, 'Door only']].concat(ticks);
   // The whole progression fits: one column per training day, squeezed to the width of the card. Tap anywhere to pick the nearest day.
   const vis = ui.pgW || 250, n = s.length, W = vis, step = W / n, COL = step;
   const T = 12, H = 200, floor = H - 34, top = T;
