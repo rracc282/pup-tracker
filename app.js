@@ -1,6 +1,6 @@
 // Churro tracker app. Uses logic.js (pure) and Supabase (sync + push queue).
 'use strict';
-const APP_VERSION = '95';
+const APP_VERSION = '96';
 const CFG = window.PT_CONFIG || {};
 const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -296,7 +296,7 @@ function openSteps(){
     if(pt){ pv = pt; tomorrowView = true; }
   }
   if(pv){
-    const nm = { warm:'Warm-up', T:'Working time', N:'Just under', E:'Easier', final:'Easy finish' };
+    const nm = { warm:'Warm-up', T:'Working time', N:'Working time, just under', E:'In between', final:'Short finish' };
     const oc = { calm:'calm', mild:'wobble', alert:'alert', escalated:'upset' };
     let h = (tomorrowView ? '<h2>Tomorrow\'s plan</h2>' : '<h2>Today\'s plan</h2>') + '<div class="hint" style="margin-bottom:10px">' + (tomorrowView ? 'Today is done. Working time tomorrow: ' : 'Working time now: ') + esc(stepLabel(pv.eff)) + '. One session. The working time is never the last rep.' + (tomorrowView ? ' It can still change if tomorrow does not go to plan.' : ' A step-up you earn today starts tomorrow.') + '</div>';
     pv.rows.forEach((r, i) => {
@@ -752,8 +752,6 @@ function renderToday(){
   const tile = (label, n) => `<div class="tile"><b>${n}</b><span>${label}</span></div>`;
   $('todayCard').innerHTML = `<div class="eyebrow">Today</div>
     <div class="budget">
-      <div class="bud"><span>Short reps <i>(up to 1 min)</i></span><b>${cueN} <em>of ${QUICK_CEILING}</em></b></div>
-      <div class="bud"><span>All reps today</span><b>${todayDeps().length} <em>of ${TOTAL_CEILING}</em></b></div>
       ${showLong ? `<div class="bud"><span>Longer reps <i>(over 1 min)</i></span><b>${outN} <em>of ${ceilingFor(new Date(), dayType())}</em></b></div>` : ''}
     </div>
     <div class="tiles">${tile('Calm', c)}${tile('Alert', al)}${tile('Wobble', w)}${tile('Upset', u)}${tile('Rests', rests)}</div>
