@@ -1,4 +1,4 @@
-const LOGIC_VERSION = '98';
+const LOGIC_VERSION = '99';
 // Pure training logic. No DOM, no network. Loaded by index.html and tested in node.
 // One ladder. Steps 0-5: a cue while she watches. 6-12: cues while she is behind the closed door. 13 and up: seconds spent outside.
 // Time outside per step. Every step has a stable id ('out.<seconds>'), so inserting steps never changes saved history.
@@ -695,6 +695,13 @@ function progressSeries(entries, place){
   out.forEach((d, k) => { d.easier = null; if(k){ const q = out[k - 1]; if(d.start < q.end) d.easier = 'break'; else if(d.start < q.start) d.easier = 'drop'; } });
   // dropped: she stepped back during this day (wobbles or an upset). dropFrom/dropTo are the steps.
     out.forEach((d, k) => { d.dropped = d.dropFrom != null; });
+  // stalled: a planned day with an alert or wobble that did not earn a step-up (and no step back). The next day starts at the same working time.
+  out.forEach((d, k) => {
+    d.stalled = false;
+    if(place !== 'home' || !planOn(d.date) || d.dropped || d.easier || !(d.alert + d.mild + d.esc)) return;
+    const nextStart = k < out.length - 1 ? out[k + 1].start : computeState(mine, startFor(entries, place), dateAdd(d.date, 1)).level;
+    d.stalled = nextStart <= d.start;
+  });
   return out;
 }
 

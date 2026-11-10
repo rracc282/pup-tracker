@@ -1,6 +1,6 @@
 // Churro tracker app. Uses logic.js (pure) and Supabase (sync + push queue).
 'use strict';
-const APP_VERSION = '98';
+const APP_VERSION = '99';
 const CFG = window.PT_CONFIG || {};
 const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -874,19 +874,19 @@ function progressHtml(){
   // Last day dropped and nothing after it yet: a short red tail down to the step she was moved to.
   const lp = s[n - 1];
   if(lp.dropped) segs += `<line x1="${xOf(n - 1).toFixed(1)}" y1="${yOf(bestOf(lp)).toFixed(1)}" x2="${(xOf(n - 1) + step * 0.35).toFixed(1)}" y2="${yOf(secOf(lp.dropTo)).toFixed(1)}" stroke="var(--upset)" stroke-width="2.5" stroke-linecap="round"/>`;
-  const dots = s.map((p, k) => `<circle cx="${xOf(k).toFixed(1)}" cy="${yOf(bestOf(p)).toFixed(1)}" r="${k === sel ? (n > 24 ? 4 : 5) : (n > 24 ? 2.5 : 3.5)}" fill="${p.maxCalm == null ? 'var(--surface)' : 'var(--calm)'}" stroke="var(--calm)" stroke-width="${p.maxCalm == null ? 2 : 0}"/>`).join('');
+  const dots = s.map((p, k) => `<circle cx="${xOf(k).toFixed(1)}" cy="${yOf(bestOf(p)).toFixed(1)}" r="${k === sel ? (n > 24 ? 4 : 5) : (n > 24 ? 2.5 : 3.5)}" fill="${p.stalled ? 'var(--wobble)' : p.maxCalm == null ? 'var(--surface)' : 'var(--calm)'}" stroke="${p.stalled ? 'var(--wobble)' : 'var(--calm)'}" stroke-width="${p.stalled ? 0 : p.maxCalm == null ? 2 : 0}"/>`).join('');
   const tri = '';
   const hits = s.map((p, k) => `<rect x="${(k * step).toFixed(1)}" y="0" width="${step.toFixed(1)}" height="${H}" fill="transparent" data-progday="${p.date}" style="cursor:pointer"/>`).join('');
   const last = s[n - 1];
   const desc = `Longest calm rep each day. Working step now: ${stepLabel(last.end)}.`;
   const nm = x => x === 0 ? 'front door' : fmtSec(x);
   const short = lv => stepLabel(lv).replace(/^Out for /, '');
-  const tags = (selP.dropped ? `<span class="tg drop">Stepped back from ${esc(short(selP.dropFrom))} to ${esc(short(selP.dropTo))}</span>` : '')
+  const tags = (selP.stalled ? `<span class="tg stall">Stalled: no step-up after this day</span>` : '') + (selP.dropped ? `<span class="tg drop">Stepped back from ${esc(short(selP.dropFrom))} to ${esc(short(selP.dropTo))}</span>` : '')
     + (selP.easier ? `<span class="tg drop">Started easier${selP.easier === 'break' ? ' after a break' : ' after a step back'}</span>` : '');
   const cap1 = `<b>${esc(fmtDay(selP.date).replace(/\/\d{4}$/, ''))}</b> · ${esc(short(selP.start))}${selP.end !== selP.start ? ' → ' + esc(short(selP.end)) : ''} · best calm ${selP.maxCalm == null ? 'none' : nm(selP.maxCalm)} · ${selP.calm} calm${selP.alert ? ', ' + selP.alert + ' alert' : ''}${selP.mild ? ', ' + selP.mild + ' wobble' + (selP.mild === 1 ? '' : 's') : ''}${selP.esc ? ', ' + selP.esc + ' upset' + (selP.esc === 1 ? '' : 's') : ''}${cueMax ? ' · ' + cueN[sel] + ' cue' + (cueN[sel] === 1 ? '' : 's') : ''}${tags ? '<div class="tgs">' + tags + '</div>' : ''}`;
   return `<div class="pgwrap" role="img" aria-label="${esc(desc)}"><svg class="pgaxis" viewBox="0 0 50 ${H}" width="50" height="${H}">${axis}</svg><div class="pgscroll"><svg viewBox="0 0 ${W.toFixed(1)} ${H}" width="${W.toFixed(1)}" height="${H}">${bands}${bars}${grid}${xa}${segs}${dots}${starts}${tri}${hits}</svg></div></div>
     <div class="progcap" aria-live="polite">${cap1}</div>
-    <div class="legend"><span><i class="lg-dot"></i>Longest calm rep</span><span><i class="lg-line"></i>Stepped back</span>${cueMax ? '<span><i class="lg-bar"></i>Cues</span>' : ''}</div>
+    <div class="legend"><span><i class="lg-dot"></i>Longest calm rep</span><span><i class="lg-line"></i>Stepped back</span>${s.some(p => p.stalled) ? '<span><i class="lg-stall"></i>Stalled day</span>' : ''}${cueMax ? '<span><i class="lg-bar"></i>Cues</span>' : ''}</div>
 `;
 }
 function moreSec(id, title, body, forceOpen){
