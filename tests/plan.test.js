@@ -72,3 +72,16 @@ console.log('plan day tests ok');
   const pl=L.planFor(l,'home',t+600000,null); assert.strictEqual(pl.idx,0,'asleep rep keeps the slot');
 }
 console.log('asleep slot ok');
+// Step-up size: 8-15%, bigger after a day with every rep calm
+{
+  const i=L.DUR.findIndex((x,k)=>k>=13&&x>=50);
+  const small=L.DUR[L.upRung(i,1.08)]/50, big=L.DUR[L.upRung(i,1.15)]/50;
+  assert(small>=1.07&&small<=1.10,'blip day ~8%: '+small); assert(big>=1.13&&big<=1.17,'clean day ~15%: '+big);
+  const clean=[]; for(let k=0;k<4;k++) clean.push(dep('2026-11-02',i,'calm',T('2026-11-02',10)+k*180000));
+  const b50=[{id:'b1',kind:'baseline',place:'home',date:'2026-10-31',createdAt:T('2026-10-31',8),level:i,from:0,outcome:'baseline',v:3}];
+  const up=L.DUR[L.stateFrom(b50.concat(clean),'home','2026-11-03').level];
+  const blip=clean.slice(); blip[3]=dep('2026-11-02',i,'alert',T('2026-11-02',10)+9e5);
+  const up2=L.DUR[L.stateFrom(b50.concat(blip),'home','2026-11-03').level];
+  assert(up/50>=1.13,'clean day: '+up); assert(up2/50>=1.07&&up2/50<=1.10,'blip day, 3 good: '+up2);
+}
+console.log('step-up size ok');

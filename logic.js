@@ -1,4 +1,4 @@
-const LOGIC_VERSION = '100';
+const LOGIC_VERSION = '101';
 // Pure training logic. No DOM, no network. Loaded by index.html and tested in node.
 // One ladder. Steps 0-5: a cue while she watches. 6-12: cues while she is behind the closed door. 13 and up: seconds spent outside.
 // Time outside per step. Every step has a stable id ('out.<seconds>'), so inserting steps never changes saved history.
@@ -24,7 +24,27 @@ function buildDur(){
   }
   return res;
 }
-const DUR = (typeof process !== 'undefined' && process.env && process.env.PT_LADDER === 'base') ? BASE_DUR.slice() : buildDur();   // PT_LADDER=base: the old ladder, only for the old tests
+const DUR_V1 = buildDur();   // the set of times before the finer set was added
+// A finer set of times: wherever two neighbouring times are more than 3% apart, whole-second (or 5 s, 15 s ...) times are added in between. All the earlier times stay, so saved reps keep their names.
+const FINE2_MAX = 1.03;
+function buildDur2(){
+  const res = [];
+  for(let i = 0; i < DUR_V1.length; i++){
+    res.push(DUR_V1[i]);
+    const a = DUR_V1[i], b = DUR_V1[i + 1];
+    if(a == null || b == null || a < 2 || b / a <= FINE2_MAX + 1e-9) continue;
+    const n = Math.ceil(Math.log(b / a) / Math.log(FINE2_MAX) - 1e-9);
+    let last = a;
+    for(let k = 1; k < n; k++){
+      const u = a < 40 ? 1 : fineUnit(a), v = Math.round(a * Math.pow(b / a, k / n) / u) * u;
+      if(v > last && v < b){ res.push(v); last = v; }
+    }
+  }
+  return res;
+}
+const PT_LADDER = (typeof process !== 'undefined' && process.env) ? process.env.PT_LADDER : null;   // 'base' and 'v1': older sets of times, only for the old tests
+const DUR = PT_LADDER === 'base' ? BASE_DUR.slice() : PT_LADDER === 'v1' ? DUR_V1 : buildDur2();
+const IS_V1 = DUR.map(x => DUR_V1.indexOf(x) >= 0);   // true for the times that existed before the finer set
 const COARSE_SET = new Set(BASE_DUR.map((s, i) => i < 13 ? 'c' + i : 'o' + s));
 function isCoarse(i){ return i < 13 ? true : COARSE_SET.has('o' + DUR[i]); }
 // The step before this one on the old (coarse) ladder. Used to replay history exactly as it happened.
@@ -32,12 +52,14 @@ function prevCoarse(i){ let j = i - 1; while(j > 0 && !isCoarse(j)) j--; return 
 function nextCoarse(i){ let j = i + 1; while(j < DUR.length - 1 && !isCoarse(j)) j++; return Math.min(DUR.length - 1, j); }
 function downCoarse(i, n){ for(let k = 0; k < n; k++) i = prevCoarse(i); return i; }
 // The highest step that is at most `ratio` times this step's time (never below the front-door step, and always lower than the step itself).
-function downRatio(i, ratio){
+function downRatio(i, ratio, date){
   if(i <= FIRST_OUT) return Math.max(0, i - 1);
   const t = DUR[i] * ratio + 1e-9; let j = FIRST_OUT;
-  for(let k = FIRST_OUT; k < i; k++) if(DUR[k] <= t) j = k;
+  const old = date != null && !planOn(date);   // before the daily plan the earlier set of times is used, so past days read the same as before
+  for(let k = FIRST_OUT; k < i; k++) if(DUR[k] <= t && (!old || IS_V1[k])) j = k;
   return Math.min(j, i - 1);
 }
+function nextV1(i){ let j = i + 1; while(j < TOP && !IS_V1[j]) j++; return j; }
 // The ladder before the extra steps were added. Only used to read old saved step numbers that have no step name.
 const OLD_DUR = [null,null,null,null,null,null,null,null,null,null,null,null,0,2,4,7,10,15,20,30,45,60,90,120,180,240,300,420,600,900,1200,1800,2700,3600,5400,7200,10800,14400];
 function fromOldIndex(i){ return i < 14 ? i : (OLD_DUR[i] != null ? DUR.indexOf(OLD_DUR[i]) : i); }
@@ -99,12 +121,14 @@ const ALERT2_FROM = '2026-10-30';
 let WIN_FROM = '2026-10-31';
 const WIN_SIZE = 5, WIN_GOOD = 4;
 // With the daily plan each day has 4 working reps and 3 good ones (one slip allowed) move her up tomorrow.
-// A good day moves her up about 8 to 10% (the rung closest to +9%), not just the next rung, which can be only 3 to 6% at longer times.
-function upRung(level){
+// A good day moves her up between 8 and 15%: closer to 15% when every rep was calm (no alert, wobble or upset), closer to 8% when it had a blip.
+// Any whole-second time works; the nearest time in the set is used.
+function upRung(level, target){
+  const t = target || 1.08;
   if(level < FIRST_OUT || DUR[level] <= 0) return level + 1;
   let best = level + 1, bd = Infinity;
   for(let j = level + 1; j <= TOP && DUR[j] <= DUR[level] * 1.2 + 1e-9; j++){
-    const d = Math.abs(DUR[j] / DUR[level] - 1.09);
+    const d = Math.abs(DUR[j] / DUR[level] - t);
     if(d <= bd + 1e-9){ bd = d; best = j; }   // a tie goes to the longer one
   }
   return best;
@@ -161,10 +185,10 @@ function computeState(depList, startLevel, asOf){
   let win = [], rough = {}, dayAw = {}, run = 0, runDates = new Set(), runAwake = 0, wob = 0, wobMin = null, badStep = null, nextEasy = false, lastEvent = null, lastEasy = false;
   const adv = {}, drops = [];
   // Daily plan (Julie): a day done well moves her up for the next day. Good = calm and awake working reps; any wobble or upset that day blocks it.
-  const dg = {}, db = {};
+  const dg = {}, db = {}, da = {};
   const settle = (d) => {
     if(d != null && (dg[d] || 0) >= PLAN_GOOD && !db[d] && level >= FIRST_OUT && level < TOP){
-      level = upRung(level); run = 0; runDates = new Set(); runAwake = 0; dayAw = {}; win = []; wob = 0; wobMin = null; badStep = null; lastEvent = 'advance'; nextEasy = false; lastEasy = false;
+      level = upRung(level, da[d] ? 1.08 : 1.15); run = 0; runDates = new Set(); runAwake = 0; dayAw = {}; win = []; wob = 0; wobMin = null; badStep = null; lastEvent = 'advance'; nextEasy = false; lastEasy = false;
     }
   };
   for(const e of depList){
@@ -172,7 +196,7 @@ function computeState(depList, startLevel, asOf){
     if((e.ladderVer == null ? LADDER_VER : e.ladderVer) !== LADDER_VER && e.level != null) level = e.level;   // reps from an older step list keep their recorded step
     // Back after a long break (Home only): start one step easier.
     if(prevDate != null && e.date !== prevDate && (e.place || 'home') === 'home' && e.date >= BREAK_FROM && dayNum(e.date) - dayNum(prevDate) >= BREAK_DAYS && level > 0){
-      level = isFineDate(e.date) && level >= FIRST_OUT ? downRatio(level, 0.8) : prevCoarse(level); run = 0; runDates = new Set(); runAwake = 0; dayAw = {}; win = []; wob = 0; wobMin = null; alertRun = 0;
+      level = isFineDate(e.date) && level >= FIRST_OUT ? downRatio(level, 0.8, e.date) : prevCoarse(level); run = 0; runDates = new Set(); runAwake = 0; dayAw = {}; win = []; wob = 0; wobMin = null; alertRun = 0;
     }
     if(dayStart[e.date] === undefined){ dayStart[e.date] = level; backDay[e.date] = prevDate != null && dayNum(e.date) - dayNum(prevDate) - 1 >= AWAY_DAYS; }
     const planRep = planOn(e.date) && (e.place || 'home') === 'home' && level >= FIRST_OUT;
@@ -192,7 +216,7 @@ function computeState(depList, startLevel, asOf){
       lastEvent = 'restless';
     } else if(oc === 'alert'){
       lastEvent = (e.date >= ALERT2_FROM && alertRun === 2) ? 'alert2' : 'alert';
-      if(planRep && hard) db[e.date] = 1;
+      if(planRep) da[e.date] = 1;
       if(hard && e.date >= WIN_FROM && level >= FIRST_OUT){ win.push('n'); if(win.length > winSize(e.date)) win.shift(); run = win.filter(x => x === 'g').length; }
     } else if(oc === 'calm'){
       wob = 0; wobMin = null;
@@ -213,7 +237,7 @@ function computeState(depList, startLevel, asOf){
           else if(v2 && level === GATE && gateDays(dayAw) < GATE_DAYS){ lastEvent = 'gate'; }   // needs awake calm reps on two different days
           else if(!useWin && v2 && level > GATE && runAwake < awakeNeed(needNow)){ lastEvent = 'awake'; }   // calm, but too many asleep reps
           else if(v2 && rough[e.date]){ if(!useWin) run = needNow; lastEvent = 'roughDay'; }   // a wobble or upset earlier today: no step-up until tomorrow
-          else if(used < (fine ? 2 : capNow) && !(e.date >= CLIMB_FROM && ((backDay[e.date] && used >= 1 && level >= FIRST_OUT) || (level >= FIRST_OUT && DUR[dayStart[e.date]] > 0 && (fine ? (used >= 1 && DUR[level + 1] > DAY_RATIO * DUR[dayStart[e.date]] + 1e-9) : DUR[level + 1] > CLIMB_RATIO * DUR[dayStart[e.date]] + 1e-9))))){ level = fine ? level + 1 : nextCoarse(level); run = 0; runDates = new Set(); runAwake = 0; dayAw = {}; win = []; adv[e.date] = used + 1; lastEvent = 'advance'; }
+          else if(used < (fine ? 2 : capNow) && !(e.date >= CLIMB_FROM && ((backDay[e.date] && used >= 1 && level >= FIRST_OUT) || (level >= FIRST_OUT && DUR[dayStart[e.date]] > 0 && (fine ? (used >= 1 && DUR[nextV1(level)] > DAY_RATIO * DUR[dayStart[e.date]] + 1e-9) : DUR[level + 1] > CLIMB_RATIO * DUR[dayStart[e.date]] + 1e-9))))){ level = fine ? nextV1(level) : nextCoarse(level); run = 0; runDates = new Set(); runAwake = 0; dayAw = {}; win = []; adv[e.date] = used + 1; lastEvent = 'advance'; }
           else { if(!useWin) run = needNow; lastEvent = 'capped'; }
         } else {
           lastEvent = (useWin && !awake) ? 'calmAsleep' : 'calmProgress';
@@ -232,8 +256,8 @@ function computeState(depList, startLevel, asOf){
       // so the new working step is never above where she actually struggled.
       if(fine){
         const f = level;
-        if(wob >= 2){ level = Math.min(downRatio(level, 0.67), downRatio(wobMin, HARD_FRAC)); level = Math.max(FIRST_OUT, level); wob = 0; wobMin = null; win = []; run = 0; lastEvent = 'wobbleDrop'; }
-        else if(hard){ level = downRatio(level, 0.75); win = []; run = 0; lastEvent = 'wobble'; }
+        if(wob >= 2){ level = Math.min(downRatio(level, 0.67, e.date), downRatio(wobMin, HARD_FRAC, e.date)); level = Math.max(FIRST_OUT, level); wob = 0; wobMin = null; win = []; run = 0; lastEvent = 'wobbleDrop'; }
+        else if(hard){ level = downRatio(level, 0.75, e.date); win = []; run = 0; lastEvent = 'wobble'; }
         else lastEvent = 'wobble';
         if(level < f) drops.push({ from: f, to: level, why: 'wobbles' });
       }
@@ -242,14 +266,14 @@ function computeState(depList, startLevel, asOf){
     } else if(oc === 'escalated'){
       if(planRep) db[e.date] = 1;
       rough[e.date] = true;
-      { const f = level; level = fine ? Math.max(FIRST_OUT, downRatio(level, 0.5)) : Math.max(0, downCoarse(level, 2)); run = 0; runDates = new Set(); runAwake = 0; dayAw = {}; win = []; wob = 0; wobMin = null; badStep = e.step; lastEvent = 'upset'; if(level < f) drops.push({ from: f, to: level, why: 'upset' }); }
+      { const f = level; level = fine ? Math.max(FIRST_OUT, downRatio(level, 0.5, e.date)) : Math.max(0, downCoarse(level, 2)); run = 0; runDates = new Set(); runAwake = 0; dayAw = {}; win = []; wob = 0; wobMin = null; badStep = e.step; lastEvent = 'upset'; if(level < f) drops.push({ from: f, to: level, why: 'upset' }); }
     }
   }
   if(asOf && prevDate != null && asOf > prevDate) settle(prevDate);
   // Today has no rep yet and the last training day was 7 or more days ago: show the easier start already.
   if(asOf && prevDate != null && asOf > prevDate && asOf >= BREAK_FROM && dayNum(asOf) - dayNum(prevDate) >= BREAK_DAYS && level > 0){
     eased = { from: level, days: dayNum(asOf) - dayNum(prevDate) };
-    level = (asOf >= WIN_FROM && level >= FIRST_OUT) ? downRatio(level, 0.8) : prevCoarse(level); run = 0; runDates = new Set(); runAwake = 0; dayAw = {}; win = []; wob = 0; wobMin = null; badStep = null; nextEasy = false; lastEasy = false; lastEvent = null;
+    level = (asOf >= WIN_FROM && level >= FIRST_OUT) ? downRatio(level, 0.8, asOf) : prevCoarse(level); run = 0; runDates = new Set(); runAwake = 0; dayAw = {}; win = []; wob = 0; wobMin = null; badStep = null; nextEasy = false; lastEasy = false; lastEvent = null;
   }
   const winOn = level >= FIRST_OUT && ((asOf && asOf >= WIN_FROM) || (prevDate != null && prevDate >= WIN_FROM));
   if(winOn) run = win.filter(x => x === 'g').length;
