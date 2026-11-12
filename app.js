@@ -1,6 +1,6 @@
 // Churro tracker app. Uses logic.js (pure) and Supabase (sync + push queue).
 'use strict';
-const APP_VERSION = '101';
+const APP_VERSION = '102';
 const CFG = window.PT_CONFIG || {};
 const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -422,7 +422,7 @@ function renderPos(){
     // The bar shows how much of today's plan is done, not a place on the ladder.
     const done = pv.rows.filter(r => r.done).length, total = pv.rows.length;
     $('posStep').textContent = (pv.done ? 'Plan done' : done + ' of ' + total + ' reps') + ' · ' + Math.min(st.dayGood || 0, 3) + ' of 3 good';
-    pctBar = pv.done ? 100 : Math.round(done / total * 100);
+    pctBar = pv.done ? 0 : Math.round(done / total * 100);   // plan finished: the bar starts again for tomorrow's plan
     $('posBar').innerHTML = `<div class="barclip">${pctBar ? `<div id="posFill" style="width:${pctBar}%"></div>` : ''}</div>`;   // no reps yet today: an empty bar
     $('posBar').setAttribute('aria-valuenow', pctBar);
     $('posNext').textContent = '';

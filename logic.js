@@ -1,4 +1,4 @@
-const LOGIC_VERSION = '101';
+const LOGIC_VERSION = '102';
 // Pure training logic. No DOM, no network. Loaded by index.html and tested in node.
 // One ladder. Steps 0-5: a cue while she watches. 6-12: cues while she is behind the closed door. 13 and up: seconds spent outside.
 // Time outside per step. Every step has a stable id ('out.<seconds>'), so inserting steps never changes saved history.
@@ -438,7 +438,13 @@ function pickNext(st, minutes, seed, opts){
 // like Julie's advice to cut the number of steps once the target passes about 15 minutes.
 function planCount(date, dur0){
   const lo = dur0 >= 900 ? 6 : 8, hi = dur0 >= 1800 ? 6 : dur0 >= 900 ? 8 : 12;   // Julie's 15-minute example has 6 steps
-  return lo + Math.floor(rand01(date + '|cnt') * (hi - lo + 1));
+  const range = hi - lo + 1;
+  const raw = d => lo + Math.floor(rand01(d + '|cnt') * range);
+  let n = raw(date);
+  // never the same number two days in a row
+  const prevN = date > PLAN_FROM ? planCount(dateAdd(date, -1), dur0) : raw(dateAdd(date, -1));   // the chain back to the first plan day
+  if(range > 1 && n === prevN) n = lo + ((n - lo) + 1 + Math.floor(rand01(date + '|cnt2') * (range - 1))) % range;
+  return n;
 }
 // Julie's later exercises: a couple of short warm-up steps, 3 or 4 steps in the target range, mixed with some in-between ones,
 // and the last two much shorter. The working reps (4) sit in the middle, never first and never last.
