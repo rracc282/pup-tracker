@@ -1,4 +1,4 @@
-const LOGIC_VERSION = '99';
+const LOGIC_VERSION = '100';
 // Pure training logic. No DOM, no network. Loaded by index.html and tested in node.
 // One ladder. Steps 0-5: a cue while she watches. 6-12: cues while she is behind the closed door. 13 and up: seconds spent outside.
 // Time outside per step. Every step has a stable id ('out.<seconds>'), so inserting steps never changes saved history.
@@ -99,6 +99,16 @@ const ALERT2_FROM = '2026-10-30';
 let WIN_FROM = '2026-10-31';
 const WIN_SIZE = 5, WIN_GOOD = 4;
 // With the daily plan each day has 4 working reps and 3 good ones (one slip allowed) move her up tomorrow.
+// A good day moves her up about 8 to 10% (the rung closest to +9%), not just the next rung, which can be only 3 to 6% at longer times.
+function upRung(level){
+  if(level < FIRST_OUT || DUR[level] <= 0) return level + 1;
+  let best = level + 1, bd = Infinity;
+  for(let j = level + 1; j <= TOP && DUR[j] <= DUR[level] * 1.2 + 1e-9; j++){
+    const d = Math.abs(DUR[j] / DUR[level] - 1.09);
+    if(d <= bd + 1e-9){ bd = d; best = j; }   // a tie goes to the longer one
+  }
+  return best;
+}
 const PLAN_GOOD = 3;   // good working reps in a day (3 or 4 are planned) for tomorrow to go up
 function winSize(date){ return planOn(date) ? 4 : WIN_SIZE; }
 function winGood(date){ return planOn(date) ? 3 : WIN_GOOD; }
@@ -154,7 +164,7 @@ function computeState(depList, startLevel, asOf){
   const dg = {}, db = {};
   const settle = (d) => {
     if(d != null && (dg[d] || 0) >= PLAN_GOOD && !db[d] && level >= FIRST_OUT && level < TOP){
-      level++; run = 0; runDates = new Set(); runAwake = 0; dayAw = {}; win = []; wob = 0; wobMin = null; badStep = null; lastEvent = 'advance'; nextEasy = false; lastEasy = false;
+      level = upRung(level); run = 0; runDates = new Set(); runAwake = 0; dayAw = {}; win = []; wob = 0; wobMin = null; badStep = null; lastEvent = 'advance'; nextEasy = false; lastEasy = false;
     }
   };
   for(const e of depList){
@@ -800,4 +810,4 @@ function buildSummary(entries, days, date, place){
   return L.join('\n');
 }
 
-if(typeof module !== 'undefined') module.exports = { BASE_DUR, isCoarse, prevCoarse, nextCoarse, downCoarse, downRatio, countsAsHard, isFineDate, HARD_FRAC, DAY_RATIO, DUR, TOP, FIRST_OUT, LAST_CUE, QUICK_CEILING, TOTAL_CEILING, isQuick, STEP_NAMES, CUE_IDS, idOf, indexOfId, stepLabel, stepTag, stepEst, gapSec, fits, need, capFor, sortedByDate, computeState, depsFor, stateFrom, baselineFor, startFor, skippedRanges, barInfo, levelsAfter, rand01, pickNext, ceilingFor, cooldownMs, waitUntil, coachMsg, normalizeEntry, buildSummary, fmtSec, sessionCount, isTiny, restSec, SESSION_MIN, SESSION_MAX, sessionSizeFor, breakMinFor, isSessionStart, warmupPlan, restlessSkip, ALERT2_FROM, setWinFrom, setPlanFrom, planCount, planOn, planFor, planSlots, pickFor, pickPlanned, planView, WIN_SIZE, WIN_GOOD, runText, RESTLESS_FROM, RULES_V2_FROM, CLIMB_FROM, CAP3_FROM, LADDER_VER, shorterStep, GATE, GATE_DAYS, GATE_DAY_REPS, dateAdd, helpAlerts, windowStats, weekCompare, progressSeries };
+if(typeof module !== 'undefined') module.exports = { BASE_DUR, isCoarse, prevCoarse, nextCoarse, downCoarse, downRatio, countsAsHard, isFineDate, HARD_FRAC, DAY_RATIO, DUR, TOP, FIRST_OUT, LAST_CUE, QUICK_CEILING, TOTAL_CEILING, isQuick, STEP_NAMES, CUE_IDS, idOf, indexOfId, stepLabel, stepTag, stepEst, gapSec, fits, need, capFor, sortedByDate, computeState, depsFor, stateFrom, baselineFor, startFor, skippedRanges, barInfo, levelsAfter, rand01, pickNext, ceilingFor, cooldownMs, waitUntil, coachMsg, normalizeEntry, buildSummary, fmtSec, sessionCount, isTiny, restSec, SESSION_MIN, SESSION_MAX, sessionSizeFor, breakMinFor, isSessionStart, warmupPlan, restlessSkip, ALERT2_FROM, setWinFrom, setPlanFrom, planCount, upRung, planOn, planFor, planSlots, pickFor, pickPlanned, planView, WIN_SIZE, WIN_GOOD, runText, RESTLESS_FROM, RULES_V2_FROM, CLIMB_FROM, CAP3_FROM, LADDER_VER, shorterStep, GATE, GATE_DAYS, GATE_DAY_REPS, dateAdd, helpAlerts, windowStats, weekCompare, progressSeries };
