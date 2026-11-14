@@ -1,6 +1,6 @@
 // Churro tracker app. Uses logic.js (pure) and Supabase (sync + push queue).
 'use strict';
-const APP_VERSION = '104';
+const APP_VERSION = '105';
 const CFG = window.PT_CONFIG || {};
 const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -1031,6 +1031,7 @@ async function saveRep(outcome){
     data = Object.assign(base, { kind:'dep', ladderVer: LADDER_VER, level: before.level, step:r.step, early: !!r.early });
     if(DUR[r.step] != null) data.targetSec = DUR[r.step];
     if(r.byPlan) data.byPlan = true;
+    if(DUR[r.step] != null && r.step >= FIRST_OUT && DUR[r.step] <= UNTIMED_MAX){ data.actualSec = DUR[r.step]; data.byPlan = true; }   // short reps: the planned time, never the time between taps
     if(r.warm) data.warm = true;
     if(data.medicated) msg = ['Logged as medicated.', 'It does not move your step.'];
     else {

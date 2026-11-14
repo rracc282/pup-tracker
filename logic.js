@@ -1,4 +1,4 @@
-const LOGIC_VERSION = '104';
+const LOGIC_VERSION = '105';
 // Pure training logic. No DOM, no network. Loaded by index.html and tested in node.
 // One ladder. Steps 0-5: a cue while she watches. 6-12: cues while she is behind the closed door. 13 and up: seconds spent outside.
 // Time outside per step. Every step has a stable id ('out.<seconds>'), so inserting steps never changes saved history.
@@ -780,7 +780,8 @@ function buildSummary(entries, days, date, place){
   L.push('Reps:');
   dayDeps.forEach((e, i) => {
     const kind = e.medicated ? 'medicated' : (countsAsHard(e, e.level != null ? e.level : e.step) ? 'working' : 'easier');
-    const dur = e.step >= FIRST_OUT && e.actualSec != null ? ' (' + fmtSec(e.actualSec) + (e.byPlan ? ', as planned' : '') + ')' : '';
+    const short = e.step >= FIRST_OUT && DUR[e.step] != null && DUR[e.step] <= 299;   // short reps are always the planned time, never the time between taps
+    const dur = e.step >= FIRST_OUT && e.actualSec != null ? ' (' + fmtSec(short ? DUR[e.step] : e.actualSec) + (e.byPlan || short ? ', as planned' : '') + ')' : '';
     const extra = [(e.tags || []).join(', '), e.spot ? 'spot: ' + e.spot : '', e.partner ? 'both of us' : '', e.walked ? 'walked first' : ''].filter(Boolean).join('; ');
     L.push((i + 1) + '. ' + hhmm(e.createdAt) + ' · ' + stepLabel(e.step) + dur + ' [' + kind + '] · ' + (OUT_LABEL[e.outcome] || '?') + (restlessSkip(e) ? ' (restless start, not counted against her)' : '') + (extra ? ' · ' + extra : '') + (e.notes ? ' · "' + e.notes + '"' : ''));
   });
