@@ -46,6 +46,8 @@ l2.push(dep('2026-11-02',lt.step,'calm',t2)); t2+=180000;
 assert(L.pickFor(l2,'home',t2,600,null).plan.done,'plan ends after the light rep');
 // Short reps: 1-2 min gap; longer reps unchanged; no session break
 const e=dep('2026-11-02',lvl(30),'calm',T('2026-11-02',10)); const c=L.cooldownMs(e); assert(c>=30000&&c<=90000);
+{ const e2=dep('2026-11-02',lvl(65),'calm',T('2026-11-02',10)); const c2=L.cooldownMs(e2); assert(c2>=30000&&c2<=90000,'65 s rep: '+c2);
+  const e3=dep('2026-11-02',lvl(65),'mild',T('2026-11-02',10)); assert(L.cooldownMs(e3)<=180000,'after a wobble up to 3 min'); }
 const w=L.waitUntil(Array.from({length:8},(_,i)=>dep('2026-11-02',lvl(30),'calm',T('2026-11-02',10)+i*120000))); assert.strictEqual(w.reason,'settle');
 // Before the start date nothing changes
 assert.strictEqual(L.planFor(base,'home',T('2026-11-01',12),null),null);

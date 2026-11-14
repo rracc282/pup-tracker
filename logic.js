@@ -1,4 +1,4 @@
-const LOGIC_VERSION = '102';
+const LOGIC_VERSION = '103';
 // Pure training logic. No DOM, no network. Loaded by index.html and tested in node.
 // One ladder. Steps 0-5: a cue while she watches. 6-12: cues while she is behind the closed door. 13 and up: seconds spent outside.
 // Time outside per step. Every step has a stable id ('out.<seconds>'), so inserting steps never changes saved history.
@@ -574,7 +574,11 @@ function restSec(step, ts){
 function cooldownMs(e){
   if(e.outcome === 'escalated') return 3 * 3600 * 1000;
   let sec = restSec(e.step, e.createdAt);
-  if(planOn(e.date) && (e.place || 'home') === 'home' && e.step >= FIRST_OUT && DUR[e.step] <= 60) sec = 30 + Math.round(60 * hash01((e.createdAt || 0) + 31));   // short reps: a short, varied gap (30 to 90 s)
+  if(planOn(e.date) && (e.place || 'home') === 'home' && e.step >= FIRST_OUT){
+    // Julie: about 30 to 60 s between steps, more only if she is agitated. Here 30 to 90 s, varied, a little more once reps pass 5 minutes.
+    const d = DUR[e.step] || 0;
+    sec = 30 + Math.round(60 * hash01((e.createdAt || 0) + 31)) + (d > 300 ? Math.min(480, Math.round(60 * (d / 300 - 1))) : 0);
+  }
   if(restlessSkip(e)) sec *= 1.5;
   else if(e.outcome === 'mild') sec *= 2;
   else if(e.outcome === 'alert') sec *= 1.5;
